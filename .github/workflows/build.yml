@@ -63,8 +63,8 @@ jobs:
                   applicationId = "com.pulse.player"
                   minSdk = 26
                   targetSdk = 35
-                  versionCode = 12
-                  versionName = "2.5-RealBeat"
+                  versionCode = 13
+                  versionName = "2.5.1-FixResume"
               }
 
               buildTypes {
@@ -526,11 +526,12 @@ jobs:
                   val remaining = inputBuffer.remaining()
                   if (remaining == 0) return
 
-                  // نسخ الصوت للمخرج بدون أي تعديل لضمان نقاء الصوت 100%
+                  // تمرير الصوت للمخرج كما هو بدون تعديل
                   val output = replaceOutputBuffer(remaining)
                   output.put(inputBuffer)
                   output.flip()
 
+                  // في الخلفية لا يتم تشغيل أي حسابات FFT لتوفير البطارية
                   if (!AudioSpectrumBus.analysisEnabled) return
 
                   val readBuf = output.duplicate().order(ByteOrder.LITTLE_ENDIAN)
@@ -618,13 +619,11 @@ jobs:
                       }
                       val combined = peak * 0.65f + (sum / count) * 0.35f
                       val db = 20f * log10(combined.coerceAtLeast(1e-6f))
-                      // تعويض خفيف للترددات العالية لتظهر بوضوح متوازن مع البيس
                       val tiltDb = (b.toFloat() / bandCount) * 11f
                       val norm = ((db + 56f + tiltDb) / 46f).coerceIn(0f, 1f)
                       tempBands[b] = norm.pow(1.22f)
                   }
 
-                  // حساب طاقة البيس (Bass) والوسط (Mid) والحدة (High)
                   var bassSum = 0f
                   for (i in 0 until 7) bassSum += tempBands[i]
                   val bass = (bassSum / 7f).coerceIn(0f, 1f)
@@ -639,7 +638,6 @@ jobs:
 
                   val overall = (rms * 3.4f).coerceIn(0f, 1f)
 
-                  // كشف ضربات الإيقاع الفعلية (Beat Onset Detection)
                   val now = System.currentTimeMillis()
                   val bassTrigger = bass > (avgBass * 1.24f + 0.05f) && bass > 0.22f
                   val beat = if (bassTrigger && (now - lastBeatMs) > 130L) {
@@ -1024,7 +1022,6 @@ jobs:
           import androidx.media3.common.C
           import androidx.media3.common.MediaItem
           import androidx.media3.common.Player
-          import androidx.media3.common.TrackSelectionParameters
           import androidx.media3.common.util.UnstableApi
           import androidx.media3.exoplayer.DefaultRenderersFactory
           import androidx.media3.exoplayer.ExoPlayer
@@ -1040,10 +1037,6 @@ jobs:
               var stopAfterCurrent: Boolean = false
                   private set
 
-              @Volatile
-              var visualizerActive: Boolean = true
-                  private set
-
               private var exoPlayerRef: WeakReference<ExoPlayer>? = null
               private var serviceRef: WeakReference<PlaybackService>? = null
 
@@ -1052,7 +1045,6 @@ jobs:
                   serviceRef = WeakReference(service)
                   exoPlayerRef = WeakReference(player)
                   player.pauseAtEndOfMediaItems = stopAfterCurrent
-                  applyOffloadForVisualizerState(player, visualizerActive)
               }
 
               fun detach() {
@@ -1070,41 +1062,12 @@ jobs:
                   }
               }
 
-              // عند فتح الشاشة: تفعيل قراءة الإيقاع الحقيقي (PCM FFT)
-              // عند إغلاق الشاشة/الخلفية: إيقاف التحليل وتفعيل Audio Offload لتوفير البطارية
-              @OptIn(UnstableApi::class)
+              // إيقاف/تفعيل تحليل FFT فقط بدون لمس مسار ExoPlayer حتى لا يقفز الصوت للوراء
               fun setVisualizerActive(active: Boolean) {
-                  visualizerActive = active
                   AudioSpectrumBus.analysisEnabled = active
                   if (!active) {
                       AudioSpectrumBus.clear()
                   }
-                  exoPlayerRef?.get()?.let { p ->
-                      Handler(p.applicationLooper).post {
-                          applyOffloadForVisualizerState(p, active)
-                      }
-                  }
-              }
-
-              @OptIn(UnstableApi::class)
-              private fun applyOffloadForVisualizerState(player: ExoPlayer, active: Boolean) {
-                  val targetMode = if (active) {
-                      TrackSelectionParameters.AudioOffloadPreferences.AUDIO_OFFLOAD_MODE_DISABLED
-                  } else {
-                      TrackSelectionParameters.AudioOffloadPreferences.AUDIO_OFFLOAD_MODE_ENABLED
-                  }
-                  val currentMode = player.trackSelectionParameters.audioOffloadPreferences.audioOffloadMode
-                  if (currentMode == targetMode) return
-
-                  val offloadPrefs = TrackSelectionParameters.AudioOffloadPreferences.Builder()
-                      .setAudioOffloadMode(targetMode)
-                      .setIsGaplessSupportRequired(false)
-                      .setIsSpeedChangeSupportRequired(false)
-                      .build()
-                  player.trackSelectionParameters = player.trackSelectionParameters
-                      .buildUpon()
-                      .setAudioOffloadPreferences(offloadPrefs)
-                      .build()
               }
 
               fun stopPlayback(stopService: Boolean = false) {
@@ -1930,7 +1893,6 @@ jobs:
 
               val clock = remember { VisualizerClock() }
 
-              // قراءة الطيف الصوتي الحقيقي (FFT) بسلاسة داخل طبقة الرسم فقط
               LaunchedEffect(isPlaying, isResumed, isTv) {
                   if (!isResumed) return@LaunchedEffect
                   val rawBands = FloatArray(AudioSpectrumBus.BAND_COUNT)
@@ -4195,13 +4157,11 @@ jobs:
                   val minDim = minOf(w, h)
 
                   when (style) {
-                      // 0: أسطوانة النيون — نبض حقيقي مع البيس + 36 عمود طيف FFT حقيقي
                       0 -> {
                           val discCenter = Offset(cx, h * 0.39f)
                           val discRadius = (minDim * 0.24f).coerceAtLeast(24f)
                           val pulse = 1f + bass * 0.14f + beat * 0.10f
 
-                          // حلقات نبض تستجيب للبيس وضربات الإيقاع
                           for (ring in 0..2) {
                               val baseScale = 1.12f + ring * 0.28f + bass * (0.18f + ring * 0.08f) + beat * 0.14f
                               val r = discRadius * baseScale
@@ -4245,7 +4205,6 @@ jobs:
                               drawCircle(color = AuraPalette.Obsidian, radius = discRadius * 0.09f, center = discCenter)
                           }
 
-                          // أعمدة الطيف الصوتي الحقيقي (36 نطاق تردد من البيس إلى الحدة)
                           val margin = w * 0.06f
                           val usableW = (w - margin * 2f).coerceAtLeast(10f)
                           val step = usableW / bandCount
@@ -4271,7 +4230,6 @@ jobs:
                                   cornerRadius = CornerRadius(barW / 2f, barW / 2f)
                               )
 
-                              // نقطة قمة عائمة (Peak Hold Cap) تهبط بنعومة بعد كل ضربة
                               val peakLevel = peaks[i].coerceIn(0f, 1f)
                               if (peakLevel > 0.04f) {
                                   val peakY = baselineY - (maxBarH * (0.03f + 0.97f * peakLevel)) - 5f
@@ -4285,7 +4243,6 @@ jobs:
                           }
                       }
 
-                      // 1: أمواج الشفق — 3 طبقات موجية مرتبطة بالترددات الحقيقية (Bass / Mid / High)
                       1 -> {
                           val layers = listOf(
                               Triple(AuraPalette.Cyan, 0, bass),
@@ -4320,7 +4277,6 @@ jobs:
                           }
                       }
 
-                      // 2: الهالة الكونية 360° — أشعة دائرية متماثلة تقرأ الطيف الحقيقي
                       2 -> {
                           val baseR = (minDim * (0.21f + bass * 0.03f)).coerceAtLeast(24f)
                           val maxRay = (minDim * 0.24f).coerceAtLeast(16f)
@@ -4362,7 +4318,6 @@ jobs:
                           )
                       }
 
-                      // 3: نبض النجوم — جزيئات تتوهج مع الإيقاع + أعمدة متناظرة حقيقية في الوسط
                       3 -> {
                           val particleCount = 28
                           for (p in 0 until particleCount) {
@@ -4406,7 +4361,6 @@ jobs:
                           }
                       }
 
-                      // 4: السكينة الإسلامية — تنفّس هادئ مرتبط بنبرة صوت القارئ الفعلية
                       else -> {
                           val center = Offset(cx, h * 0.46f)
                           val voiceEnergy = (mid * 0.65f + overall * 0.35f).coerceIn(0f, 1f)
@@ -4548,7 +4502,6 @@ jobs:
                               style = Stroke(width = 1.5f)
                           )
 
-                          // موجتان حريريتان تتجاوبان بهدوء مع ترددات الصوت الحقيقية للقارئ
                           val baseWaveY = h * 0.88f
                           for (layer in 0..1) {
                               val path = Path()
