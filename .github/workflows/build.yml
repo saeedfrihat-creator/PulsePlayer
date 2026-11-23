@@ -63,8 +63,8 @@ jobs:
                   applicationId = "com.pulse.player"
                   minSdk = 26
                   targetSdk = 35
-                  versionCode = 9
-                  versionName = "2.2-QuranTheme"
+                  versionCode = 10
+                  versionName = "2.3-EcoPower"
               }
 
               buildTypes {
@@ -687,6 +687,9 @@ jobs:
           import androidx.annotation.OptIn
           import androidx.media3.common.AudioAttributes
           import androidx.media3.common.C
+          import androidx.media3.common.MediaItem
+          import androidx.media3.common.Player
+          import androidx.media3.common.TrackSelectionParameters
           import androidx.media3.common.util.UnstableApi
           import androidx.media3.exoplayer.ExoPlayer
           import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
@@ -735,15 +738,40 @@ jobs:
 
                   val mediaSourceFactory = DefaultMediaSourceFactory(PulseDataSourceFactory(this))
 
+                  // افتراضياً WAKE_MODE_LOCAL بدون حجز الواي فاي لتوفير البطارية
                   val player = ExoPlayer.Builder(this)
                       .setMediaSourceFactory(mediaSourceFactory)
                       .setAudioAttributes(audioAttributes, true)
                       .setHandleAudioBecomingNoisy(true)
-                      .setWakeMode(C.WAKE_MODE_NETWORK)
+                      .setWakeMode(C.WAKE_MODE_LOCAL)
                       .build()
+
+                  // تفعيل Audio Offload لتشغيل الملفات على شريحة الصوت الموفرة للطاقة (DSP)
+                  val offloadPrefs = TrackSelectionParameters.AudioOffloadPreferences.Builder()
+                      .setAudioOffloadMode(TrackSelectionParameters.AudioOffloadPreferences.AUDIO_OFFLOAD_MODE_ENABLED)
+                      .setIsGaplessSupportRequired(false)
+                      .setIsSpeedChangeSupportRequired(false)
+                      .build()
+                  player.trackSelectionParameters = player.trackSelectionParameters
+                      .buildUpon()
+                      .setAudioOffloadPreferences(offloadPrefs)
+                      .build()
+
+                  // تبديل WakeMode ديناميكياً: شبكة فقط عند بث الهوم لاب، ومحلي فقط لأغاني الهاتف
+                  player.addListener(object : Player.Listener {
+                      override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                          updateWakeModeForItem(player, mediaItem)
+                      }
+                  })
 
                   PlaybackBridge.attach(player)
                   mediaSession = MediaSession.Builder(this, player).build()
+              }
+
+              private fun updateWakeModeForItem(player: ExoPlayer, mediaItem: MediaItem?) {
+                  val scheme = mediaItem?.localConfiguration?.uri?.scheme?.lowercase()
+                  val isNetworkStream = scheme == "http" || scheme == "https" || scheme == SmbHelper.SMB_SCHEME
+                  player.setWakeMode(if (isNetworkStream) C.WAKE_MODE_NETWORK else C.WAKE_MODE_LOCAL)
               }
 
               override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? {
@@ -1224,6 +1252,13 @@ jobs:
           import kotlin.math.cos
           import kotlin.math.sin
 
+          // عزل حالة الحركة داخل Draw Phase فقط لمنع إعادة بناء الواجهة (0% Recomposition)
+          @Stable
+          class VisualizerClock {
+              var phase by mutableFloatStateOf(0f)
+              var amplitude by mutableFloatStateOf(0f)
+          }
+
           private object AuraPalette {
               val Obsidian = Color(0xFF07070E)
               val DeepNight = Color(0xFF0D0D1A)
@@ -1236,7 +1271,6 @@ jobs:
               val MutedText = Color(0xFF9CA3AF)
               val Danger = Color(0xFFFB7185)
 
-              // ألوان الثيم الإسلامي (زمردي عميق وذهبي ملكي)
               val EmeraldObsidian = Color(0xFF041411)
               val EmeraldGlow = Color(0xFF10B981)
               val EmeraldGlass = Color(0xCC071E19)
@@ -1284,6 +1318,7 @@ jobs:
           class MainActivity : ComponentActivity() {
               private var controllerFuture: ListenableFuture<MediaController>? = null
               private val playerState = mutableStateOf<Player?>(null)
+              private val isResumedState = mutableStateOf(false)
 
               override fun onStart() {
                   super.onStart()
@@ -1292,6 +1327,16 @@ jobs:
                   controllerFuture?.addListener({
                       playerState.value = controllerFuture?.get()
                   }, ContextCompat.getMainExecutor(this))
+              }
+
+              override fun onResume() {
+                  super.onResume()
+                  isResumedState.value = true
+              }
+
+              override fun onPause() {
+                  isResumedState.value = false
+                  super.onPause()
               }
 
               override fun onStop() {
@@ -1320,7 +1365,10 @@ jobs:
                           )
                       ) {
                           Surface(modifier = Modifier.fillMaxSize(), color = AuraPalette.Obsidian) {
-                              PulseApp(player = playerState.value)
+                              PulseApp(
+                                  player = playerState.value,
+                                  isResumed = isResumedState.value
+                              )
                           }
                       }
                   }
@@ -1328,7 +1376,7 @@ jobs:
           }
 
           @Composable
-          fun PulseApp(player: Player?) {
+          fun PulseApp(player: Player?, isResumed: Boolean) {
               val context = LocalContext.current
               val activity = context as? Activity
               val config = LocalConfiguration.current
@@ -1384,7 +1432,6 @@ jobs:
               var shuffleEnabled by remember { mutableStateOf(false) }
               var playbackMode by remember { mutableIntStateOf(prefs.getInt("playback_mode", MODE_REPEAT_ALL)) }
 
-              // الكشف التلقائي عن القرآن الكريم وتفعيل الخلفية الإسلامية
               val isQuranTrack = remember(currentTitle, currentArtist, currentAlbum) {
                   isQuranContent(currentTitle, currentArtist, currentAlbum)
               }
@@ -1395,30 +1442,31 @@ jobs:
               }
               val isIslamicActive = effectiveStyle == STYLE_ISLAMIC
 
-              var animPhase by remember { mutableFloatStateOf(0f) }
-              var activeAmplitude by remember { mutableFloatStateOf(0f) }
+              // ساعة حركة معزولة تعمل بـ 30fps على الهاتف وتتوقف كلياً عند الخروج للخلفية
+              val clock = remember { VisualizerClock() }
 
-              LaunchedEffect(isPlaying) {
-                  var lastNanos = 0L
-                  while (true) {
-                      withFrameNanos { now ->
-                          if (lastNanos != 0L) {
-                              val dt = ((now - lastNanos) / 1_000_000_000f).coerceIn(0f, 0.05f)
-                              if (isPlaying) {
-                                  animPhase += dt
-                                  activeAmplitude = (activeAmplitude + dt * 3.5f).coerceAtMost(1f)
-                              } else {
-                                  activeAmplitude = (activeAmplitude - dt * 2.5f).coerceAtLeast(0f)
-                              }
-                          }
-                          lastNanos = now
+              LaunchedEffect(isPlaying, isResumed, isTv) {
+                  if (!isResumed) return@LaunchedEffect
+                  var lastTimeMs = System.currentTimeMillis()
+                  val frameDelayMs = if (isTv) 25L else 33L
+                  while (isResumed) {
+                      val now = System.currentTimeMillis()
+                      val dt = ((now - lastTimeMs) / 1000f).coerceIn(0f, 0.06f)
+                      lastTimeMs = now
+                      if (isPlaying) {
+                          clock.phase += dt
+                          clock.amplitude = (clock.amplitude + dt * 3.5f).coerceAtMost(1f)
+                      } else {
+                          clock.amplitude = (clock.amplitude - dt * 2.5f).coerceAtLeast(0f)
+                          if (clock.amplitude <= 0.001f) break
                       }
-                      if (!isPlaying && activeAmplitude <= 0.001f) break
+                      delay(frameDelayMs)
                   }
               }
 
-              DisposableEffect(isFullScreen) {
-                  if (isFullScreen) {
+              // إبقاء الشاشة مضاءة على التلفاز فقط في الوضع المسرحي لحماية بطارية الهاتف
+              DisposableEffect(isFullScreen, isTv) {
+                  if (isFullScreen && isTv) {
                       activity?.window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
                   }
                   onDispose {
@@ -1601,7 +1649,10 @@ jobs:
               }
 
               DisposableEffect(player) {
-                  if (player == null) return@DisposableEffect onDispose {}
+                  if (player == null) {
+                      isPlaying = false
+                      return@DisposableEffect onDispose {}
+                  }
 
                   applyPlaybackMode(playbackMode, showToast = false)
                   fun syncState() {
@@ -1624,11 +1675,12 @@ jobs:
                   onDispose { player.removeListener(listener) }
               }
 
-              LaunchedEffect(player, isPlaying) {
-                  while (player != null && isPlaying) {
+              // تحديث شريط التقدم مرة كل ثانية فقط وعندما تكون الشاشة مفتوحة
+              LaunchedEffect(player, isPlaying, isResumed) {
+                  while (player != null && isPlaying && isResumed) {
                       positionMs = player.currentPosition.coerceAtLeast(0L)
                       durationMs = player.duration.coerceAtLeast(0L)
-                      delay(400)
+                      delay(1000L)
                   }
               }
 
@@ -1710,9 +1762,10 @@ jobs:
                       .fillMaxSize()
                       .background(if (isIslamicActive) AuraPalette.EmeraldObsidian else AuraPalette.Obsidian)
               ) {
+                  // خلفية ثابتة موفرة للطاقة أثناء التصفح على الهاتف، ومتحركة في وضع الاستوديو والتلفاز
                   AmbientAuroraBackdrop(
-                      phase = animPhase,
-                      amplitude = activeAmplitude,
+                      clock = clock,
+                      animate = isFullScreen || isTv,
                       isIslamic = isIslamicActive,
                       modifier = Modifier.fillMaxSize()
                   )
@@ -1728,8 +1781,7 @@ jobs:
                           shuffleEnabled = shuffleEnabled,
                           playbackMode = playbackMode,
                           style = effectiveStyle,
-                          phase = animPhase,
-                          amplitude = activeAmplitude,
+                          clock = clock,
                           onSeek = { player?.seekTo(it) },
                           onPlayPause = onPlayPause,
                           onNext = onNext,
@@ -1751,8 +1803,7 @@ jobs:
                               isTv = isTv,
                               isPlaying = isPlaying,
                               isIslamic = isIslamicActive,
-                              phase = animPhase,
-                              amplitude = activeAmplitude,
+                              clock = clock,
                               onOpenStudio = { isFullScreen = true },
                               onRefresh = { if (selectedTab == 0) refreshLocal() else refreshHomeLab() },
                               onOpenSettings = { showServerDialog = true }
@@ -1843,8 +1894,7 @@ jobs:
                                                           song = song,
                                                           isCurrent = song.id == currentMediaId,
                                                           isPlaying = isPlaying,
-                                                          phase = animPhase,
-                                                          amplitude = activeAmplitude,
+                                                          clock = clock,
                                                           showFolderBadge = true,
                                                           onClick = { playListFromIndex(matchedSongs, index) },
                                                           onManageClick = if (!song.isRemote) { { songToManage = song } } else null
@@ -1942,8 +1992,7 @@ jobs:
                                                       song = song,
                                                       isCurrent = song.id == currentMediaId,
                                                       isPlaying = isPlaying,
-                                                      phase = animPhase,
-                                                      amplitude = activeAmplitude,
+                                                      clock = clock,
                                                       showFolderBadge = false,
                                                       onClick = { playListFromIndex(folderSongs, index) },
                                                       onManageClick = if (!song.isRemote) { { songToManage = song } } else null
@@ -1973,8 +2022,7 @@ jobs:
                                       shuffleEnabled = shuffleEnabled,
                                       playbackMode = playbackMode,
                                       style = effectiveStyle,
-                                      phase = animPhase,
-                                      amplitude = activeAmplitude,
+                                      clock = clock,
                                       onPlayPause = onPlayPause,
                                       onNext = onNext,
                                       onPrev = onPrev,
@@ -1996,8 +2044,7 @@ jobs:
                                       isPlaying = isPlaying,
                                       isIslamic = isIslamicActive,
                                       playbackMode = playbackMode,
-                                      phase = animPhase,
-                                      amplitude = activeAmplitude,
+                                      clock = clock,
                                       positionMs = positionMs,
                                       durationMs = durationMs,
                                       onPlayPause = onPlayPause,
@@ -2188,8 +2235,8 @@ jobs:
 
           @Composable
           fun AmbientAuroraBackdrop(
-              phase: Float,
-              amplitude: Float,
+              clock: VisualizerClock,
+              animate: Boolean,
               isIslamic: Boolean,
               modifier: Modifier = Modifier
           ) {
@@ -2198,6 +2245,9 @@ jobs:
                   val h = size.height
                   if (w <= 2f || h <= 2f) return@Canvas
                   val minDim = minOf(w, h)
+
+                  val phase = if (animate) clock.phase else 0f
+                  val amplitude = if (animate) clock.amplitude else 0.15f
                   val glowBoost = 0.18f + 0.12f * amplitude
 
                   val c1 = if (isIslamic) AuraPalette.EmeraldGlow else AuraPalette.Violet
@@ -2246,8 +2296,7 @@ jobs:
               isTv: Boolean,
               isPlaying: Boolean,
               isIslamic: Boolean,
-              phase: Float,
-              amplitude: Float,
+              clock: VisualizerClock,
               onOpenStudio: () -> Unit,
               onRefresh: () -> Unit,
               onOpenSettings: () -> Unit
@@ -2268,7 +2317,7 @@ jobs:
                           contentAlignment = Alignment.Center
                       ) {
                           if (isPlaying) {
-                              MiniEqualizerBars(phase = phase, amplitude = amplitude, tintPrimary = Color.White, tintSecondary = Color.White)
+                              MiniEqualizerBars(clock = clock, tintPrimary = Color.White, tintSecondary = Color.White)
                           } else {
                               Icon(
                                   if (isTv) Icons.Default.Tv else Icons.Default.GraphicEq,
@@ -2622,8 +2671,7 @@ jobs:
               song: SongItem,
               isCurrent: Boolean,
               isPlaying: Boolean,
-              phase: Float,
-              amplitude: Float,
+              clock: VisualizerClock,
               showFolderBadge: Boolean,
               onClick: () -> Unit,
               onManageClick: (() -> Unit)?
@@ -2688,7 +2736,7 @@ jobs:
                               contentAlignment = Alignment.Center
                           ) {
                               if (isCurrent && isPlaying) {
-                                  MiniEqualizerBars(phase = phase, amplitude = amplitude, tintPrimary = Color.White, tintSecondary = Color(0xFFE0F2FE))
+                                  MiniEqualizerBars(clock = clock, tintPrimary = Color.White, tintSecondary = Color(0xFFE0F2FE))
                               } else {
                                   Icon(
                                       if (isQuranSong) Icons.Default.MenuBook else if (song.isRemote) Icons.Default.Storage else Icons.Default.MusicNote,
@@ -2755,8 +2803,7 @@ jobs:
               isPlaying: Boolean,
               isIslamic: Boolean,
               playbackMode: Int,
-              phase: Float,
-              amplitude: Float,
+              clock: VisualizerClock,
               positionMs: Long,
               durationMs: Long,
               onPlayPause: () -> Unit,
@@ -2791,7 +2838,7 @@ jobs:
                           .padding(start = 12.dp, end = 10.dp, top = 10.dp, bottom = 10.dp),
                       verticalAlignment = Alignment.CenterVertically
                   ) {
-                      MiniSpinningDisc(phase = phase, isPlaying = isPlaying, isIslamic = isIslamic)
+                      MiniSpinningDisc(clock = clock, isPlaying = isPlaying, isIslamic = isIslamic)
                       Spacer(Modifier.width(12.dp))
                       Column(modifier = Modifier.weight(1f)) {
                           Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -2854,12 +2901,13 @@ jobs:
           }
 
           @Composable
-          fun MiniSpinningDisc(phase: Float, isPlaying: Boolean, isIslamic: Boolean) {
+          fun MiniSpinningDisc(clock: VisualizerClock, isPlaying: Boolean, isIslamic: Boolean) {
               Canvas(modifier = Modifier.size(44.dp)) {
                   val c = Offset(size.width / 2f, size.height / 2f)
                   val r = size.minDimension / 2f
+                  val phase = if (isPlaying) clock.phase else 0f
                   if (isIslamic) {
-                      val deg = if (isPlaying) (phase * 14f) % 360f else 0f
+                      val deg = (phase * 14f) % 360f
                       val s = r * 0.62f
                       drawCircle(
                           brush = Brush.radialGradient(listOf(Color(0xFF0A4A3B), Color(0xFF041A15))),
@@ -2874,7 +2922,7 @@ jobs:
                       }
                       drawCircle(AuraPalette.Gold, radius = r * 0.22f, center = c)
                   } else {
-                      rotate(degrees = if (isPlaying) (phase * 55f) % 360f else 0f, pivot = c) {
+                      rotate(degrees = (phase * 55f) % 360f, pivot = c) {
                           drawCircle(
                               brush = Brush.radialGradient(listOf(Color(0xFF35246B), Color(0xFF0E0E1C))),
                               radius = r,
@@ -2929,8 +2977,7 @@ jobs:
               shuffleEnabled: Boolean,
               playbackMode: Int,
               style: Int,
-              phase: Float,
-              amplitude: Float,
+              clock: VisualizerClock,
               onPlayPause: () -> Unit,
               onNext: () -> Unit,
               onPrev: () -> Unit,
@@ -2966,8 +3013,7 @@ jobs:
                   ) {
                       VisualizerStage(
                           style = style,
-                          phase = phase,
-                          amplitude = amplitude,
+                          clock = clock,
                           modifier = Modifier.fillMaxSize()
                       )
                       if (playbackMode == MODE_PLAY_ONCE) {
@@ -3096,8 +3142,7 @@ jobs:
               shuffleEnabled: Boolean,
               playbackMode: Int,
               style: Int,
-              phase: Float,
-              amplitude: Float,
+              clock: VisualizerClock,
               onSeek: (Long) -> Unit,
               onPlayPause: () -> Unit,
               onNext: () -> Unit,
@@ -3220,8 +3265,7 @@ jobs:
               ) {
                   VisualizerStage(
                       style = style,
-                      phase = phase,
-                      amplitude = amplitude,
+                      clock = clock,
                       modifier = Modifier
                           .fillMaxSize()
                           .padding(top = stageTopPad, bottom = stageBottomPad)
@@ -3509,8 +3553,7 @@ jobs:
           @Composable
           fun VisualizerStage(
               style: Int,
-              phase: Float,
-              amplitude: Float,
+              clock: VisualizerClock,
               modifier: Modifier = Modifier
           ) {
               Canvas(modifier = modifier) {
@@ -3518,6 +3561,8 @@ jobs:
                   val h = size.height
                   if (w <= 2f || h <= 2f) return@Canvas
 
+                  val phase = clock.phase
+                  val amplitude = clock.amplitude
                   val cx = w / 2f
                   val cy = h / 2f
                   val minDim = minOf(w, h)
@@ -3709,12 +3754,10 @@ jobs:
                           }
                       }
 
-                      // 4: السكينة الإسلامية — زخرفة ربع الحزب الذهبية ومحراب النور
                       else -> {
                           val center = Offset(cx, h * 0.46f)
                           val breathe = 1f + 0.045f * sin(phase * 1.8f) * amplitude
 
-                          // 1) هالة نور ذهبية دافئة في المنتصف
                           val haloR = (minDim * 0.46f * breathe).coerceAtLeast(30f)
                           drawCircle(
                               brush = Brush.radialGradient(
@@ -3730,7 +3773,6 @@ jobs:
                               center = center
                           )
 
-                          // 2) قوس محراب إسلامي رقيق يحيط بالزخرفة
                           val archW = minDim * 0.72f
                           val archTop = (center.y - minDim * 0.42f).coerceAtLeast(8f)
                           val archMid = center.y - minDim * 0.12f
@@ -3761,7 +3803,6 @@ jobs:
                               style = Stroke(width = 2f, cap = StrokeCap.Round)
                           )
 
-                          // 3) جزيئات نور ذهبية دافئة صاعدة ببطء
                           for (p in 0 until 22) {
                               val speed = 0.055f + (p % 4) * 0.018f
                               val life = ((phase * speed + p * 0.173f) % 1f)
@@ -3773,7 +3814,6 @@ jobs:
                               drawCircle(AuraPalette.GoldLight.copy(alpha = alpha), radius = r, center = Offset(px, py))
                           }
 
-                          // 4) الدوائر الزخرفية واللآلئ الذهبية الـ 16
                           val outerR = (minDim * 0.31f * breathe).coerceAtLeast(28f)
                           drawCircle(
                               color = AuraPalette.Gold.copy(alpha = 0.28f),
@@ -3796,7 +3836,6 @@ jobs:
                               drawCircle(AuraPalette.GoldLight.copy(alpha = 0.65f), radius = 2.6f, center = dotPos)
                           }
 
-                          // 5) نجمة ربع الحزب الخارجية (مربعان متداخلان بزاوية 45°)
                           val sOuter = outerR * 0.68f
                           for (rot in listOf(slowAngle, slowAngle + 45f)) {
                               rotate(degrees = rot, pivot = center) {
@@ -3820,7 +3859,6 @@ jobs:
                               }
                           }
 
-                          // 6) نجمة داخلية تدور بعكس الاتجاه ببطء
                           val sInner = outerR * 0.43f
                           val reverseAngle = (-phase * 3.8f) % 360f
                           for (rot in listOf(reverseAngle, reverseAngle + 45f)) {
@@ -3839,7 +3877,6 @@ jobs:
                               }
                           }
 
-                          // 7) وردة مركزية متوهجة
                           val coreR = (outerR * 0.24f).coerceAtLeast(10f)
                           drawCircle(
                               brush = Brush.radialGradient(
@@ -3857,7 +3894,6 @@ jobs:
                               style = Stroke(width = 1.5f)
                           )
 
-                          // 8) موجتان حريريتان ذهبيتان هادئتان جداً في الأسفل
                           val baseWaveY = h * 0.88f
                           for (layer in 0..1) {
                               val path = Path()
@@ -3884,8 +3920,7 @@ jobs:
 
           @Composable
           fun MiniEqualizerBars(
-              phase: Float,
-              amplitude: Float,
+              clock: VisualizerClock,
               tintPrimary: Color = AuraPalette.Cyan,
               tintSecondary: Color = AuraPalette.Violet,
               modifier: Modifier = Modifier.size(width = 20.dp, height = 16.dp)
@@ -3894,6 +3929,8 @@ jobs:
                   val w = size.width
                   val h = size.height
                   if (w <= 1f || h <= 1f) return@Canvas
+                  val phase = clock.phase
+                  val amplitude = clock.amplitude
                   val bars = 4
                   val step = w / bars
                   val barW = step * 0.58f
