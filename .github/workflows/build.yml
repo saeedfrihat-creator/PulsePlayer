@@ -63,8 +63,8 @@ jobs:
                   applicationId = "com.pulse.player"
                   minSdk = 26
                   targetSdk = 35
-                  versionCode = 10
-                  versionName = "2.3-EcoPower"
+                  versionCode = 11
+                  versionName = "2.4-TVStop"
               }
 
               buildTypes {
@@ -173,10 +173,12 @@ jobs:
               <string name="toast_song_hidden">Track hidden from app</string>
               <string name="toast_folder_hidden">Folder hidden: %1$s</string>
               <string name="toast_restored">All hidden files and folders restored</string>
+              <string name="toast_stopped">Playback stopped</string>
               <string name="cd_delete_or_hide">Delete or hide</string>
               <string name="cd_previous">Previous</string>
               <string name="cd_rewind">Rewind 15s</string>
               <string name="cd_play_pause">Play / Pause</string>
+              <string name="cd_stop">Stop playback</string>
               <string name="cd_forward">Forward 15s</string>
               <string name="cd_next">Next</string>
               <string name="cd_shuffle">Shuffle</string>
@@ -252,10 +254,12 @@ jobs:
               <string name="toast_song_hidden">تم إخفاء الملف من البرنامج</string>
               <string name="toast_folder_hidden">تم إخفاء مجلد %1$s</string>
               <string name="toast_restored">تمت استعادة جميع الملفات والمجلدات المخفية</string>
+              <string name="toast_stopped">تم إيقاف التشغيل</string>
               <string name="cd_delete_or_hide">حذف أو إخفاء</string>
               <string name="cd_previous">السابق</string>
               <string name="cd_rewind">تأخير 15 ثانية</string>
               <string name="cd_play_pause">تشغيل/إيقاف</string>
+              <string name="cd_stop">إيقاف التشغيل نهائياً</string>
               <string name="cd_forward">تقديم 15 ثانية</string>
               <string name="cd_next">التالي</string>
               <string name="cd_shuffle">عشوائي</string>
@@ -360,6 +364,7 @@ jobs:
                   <activity
                       android:name=".MainActivity"
                       android:exported="true"
+                      android:launchMode="singleTop"
                       android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|navigation">
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
@@ -682,6 +687,7 @@ jobs:
           cat << 'EOF' > app/src/main/java/com/pulse/player/PlaybackService.kt
           package com.pulse.player
 
+          import android.app.PendingIntent
           import android.content.Intent
           import android.os.Handler
           import androidx.annotation.OptIn
@@ -703,15 +709,18 @@ jobs:
                   private set
 
               private var exoPlayerRef: WeakReference<ExoPlayer>? = null
+              private var serviceRef: WeakReference<PlaybackService>? = null
 
               @OptIn(UnstableApi::class)
-              fun attach(player: ExoPlayer) {
+              fun attach(service: PlaybackService, player: ExoPlayer) {
+                  serviceRef = WeakReference(service)
                   exoPlayerRef = WeakReference(player)
                   player.pauseAtEndOfMediaItems = stopAfterCurrent
               }
 
               fun detach() {
                   exoPlayerRef = null
+                  serviceRef = null
               }
 
               @OptIn(UnstableApi::class)
@@ -721,6 +730,23 @@ jobs:
                       Handler(p.applicationLooper).post {
                           p.pauseAtEndOfMediaItems = enabled
                       }
+                  }
+              }
+
+              fun stopPlayback(stopService: Boolean = false) {
+                  val p = exoPlayerRef?.get()
+                  if (p != null) {
+                      Handler(p.applicationLooper).post {
+                          p.playWhenReady = false
+                          p.pause()
+                          p.stop()
+                          p.clearMediaItems()
+                          if (stopService) {
+                              serviceRef?.get()?.shutdownService()
+                          }
+                      }
+                  } else if (stopService) {
+                      serviceRef?.get()?.shutdownService()
                   }
               }
           }
@@ -738,7 +764,6 @@ jobs:
 
                   val mediaSourceFactory = DefaultMediaSourceFactory(PulseDataSourceFactory(this))
 
-                  // افتراضياً WAKE_MODE_LOCAL بدون حجز الواي فاي لتوفير البطارية
                   val player = ExoPlayer.Builder(this)
                       .setMediaSourceFactory(mediaSourceFactory)
                       .setAudioAttributes(audioAttributes, true)
@@ -746,7 +771,6 @@ jobs:
                       .setWakeMode(C.WAKE_MODE_LOCAL)
                       .build()
 
-                  // تفعيل Audio Offload لتشغيل الملفات على شريحة الصوت الموفرة للطاقة (DSP)
                   val offloadPrefs = TrackSelectionParameters.AudioOffloadPreferences.Builder()
                       .setAudioOffloadMode(TrackSelectionParameters.AudioOffloadPreferences.AUDIO_OFFLOAD_MODE_ENABLED)
                       .setIsGaplessSupportRequired(false)
@@ -757,15 +781,26 @@ jobs:
                       .setAudioOffloadPreferences(offloadPrefs)
                       .build()
 
-                  // تبديل WakeMode ديناميكياً: شبكة فقط عند بث الهوم لاب، ومحلي فقط لأغاني الهاتف
                   player.addListener(object : Player.Listener {
                       override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
                           updateWakeModeForItem(player, mediaItem)
                       }
                   })
 
-                  PlaybackBridge.attach(player)
-                  mediaSession = MediaSession.Builder(this, player).build()
+                  val openAppIntent = Intent(this, MainActivity::class.java).apply {
+                      flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                  }
+                  val sessionActivityPendingIntent = PendingIntent.getActivity(
+                      this,
+                      0,
+                      openAppIntent,
+                      PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+                  )
+
+                  PlaybackBridge.attach(this, player)
+                  mediaSession = MediaSession.Builder(this, player)
+                      .setSessionActivity(sessionActivityPendingIntent)
+                      .build()
               }
 
               private fun updateWakeModeForItem(player: ExoPlayer, mediaItem: MediaItem?) {
@@ -774,15 +809,24 @@ jobs:
                   player.setWakeMode(if (isNetworkStream) C.WAKE_MODE_NETWORK else C.WAKE_MODE_LOCAL)
               }
 
+              fun shutdownService() {
+                  runCatching { stopForeground(STOP_FOREGROUND_REMOVE) }
+                  stopSelf()
+              }
+
               override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? {
                   return mediaSession
               }
 
+              // إيقاف الصوت والخدمة فوراً عند إزالة التطبيق من قائمة التطبيقات الأخيرة
               override fun onTaskRemoved(rootIntent: Intent?) {
-                  val player = mediaSession?.player
-                  if (player == null || !player.playWhenReady || player.mediaItemCount == 0) {
-                      stopSelf()
+                  mediaSession?.player?.let { player ->
+                      player.playWhenReady = false
+                      player.pause()
+                      player.stop()
+                      player.clearMediaItems()
                   }
+                  shutdownService()
               }
 
               override fun onDestroy() {
@@ -1161,6 +1205,7 @@ jobs:
           import android.os.Build
           import android.os.Bundle
           import android.provider.MediaStore
+          import android.view.KeyEvent
           import android.view.WindowManager
           import android.widget.Toast
           import androidx.activity.ComponentActivity
@@ -1252,7 +1297,6 @@ jobs:
           import kotlin.math.cos
           import kotlin.math.sin
 
-          // عزل حالة الحركة داخل Draw Phase فقط لمنع إعادة بناء الواجهة (0% Recomposition)
           @Stable
           class VisualizerClock {
               var phase by mutableFloatStateOf(0f)
@@ -1320,6 +1364,11 @@ jobs:
               private val playerState = mutableStateOf<Player?>(null)
               private val isResumedState = mutableStateOf(false)
 
+              private fun isTvDevice(): Boolean {
+                  return (resources.configuration.uiMode and Configuration.UI_MODE_TYPE_MASK) ==
+                      Configuration.UI_MODE_TYPE_TELEVISION
+              }
+
               override fun onStart() {
                   super.onStart()
                   val sessionToken = SessionToken(this, ComponentName(this, PlaybackService::class.java))
@@ -1344,6 +1393,48 @@ jobs:
                   controllerFuture = null
                   playerState.value = null
                   super.onStop()
+              }
+
+              // على Android TV: عند إغلاق التطبيق بزر الرجوع يتوقف الصوت نهائياً
+              override fun onDestroy() {
+                  if (isFinishing && isTvDevice()) {
+                      PlaybackBridge.stopPlayback(stopService = true)
+                  }
+                  super.onDestroy()
+              }
+
+              // دعم أزرار الميديا في ريموت Android TV (Stop / Play / Pause / Next / Prev)
+              override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+                  if (event.action == KeyEvent.ACTION_DOWN) {
+                      when (event.keyCode) {
+                          KeyEvent.KEYCODE_MEDIA_STOP -> {
+                              PlaybackBridge.stopPlayback(stopService = false)
+                              Toast.makeText(this, getString(R.string.toast_stopped), Toast.LENGTH_SHORT).show()
+                              return true
+                          }
+                          KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> {
+                              playerState.value?.let { if (it.isPlaying) it.pause() else it.play() }
+                              return true
+                          }
+                          KeyEvent.KEYCODE_MEDIA_PAUSE -> {
+                              playerState.value?.pause()
+                              return true
+                          }
+                          KeyEvent.KEYCODE_MEDIA_PLAY -> {
+                              playerState.value?.play()
+                              return true
+                          }
+                          KeyEvent.KEYCODE_MEDIA_NEXT -> {
+                              playerState.value?.let { it.seekToNext(); it.play() }
+                              return true
+                          }
+                          KeyEvent.KEYCODE_MEDIA_PREVIOUS -> {
+                              playerState.value?.let { it.seekToPrevious(); it.play() }
+                              return true
+                          }
+                      }
+                  }
+                  return super.dispatchKeyEvent(event)
               }
 
               override fun onCreate(savedInstanceState: Bundle?) {
@@ -1432,6 +1523,8 @@ jobs:
               var shuffleEnabled by remember { mutableStateOf(false) }
               var playbackMode by remember { mutableIntStateOf(prefs.getInt("playback_mode", MODE_REPEAT_ALL)) }
 
+              val hasActiveTrack = currentMediaId.isNotEmpty() || isPlaying
+
               val isQuranTrack = remember(currentTitle, currentArtist, currentAlbum) {
                   isQuranContent(currentTitle, currentArtist, currentAlbum)
               }
@@ -1442,7 +1535,6 @@ jobs:
               }
               val isIslamicActive = effectiveStyle == STYLE_ISLAMIC
 
-              // ساعة حركة معزولة تعمل بـ 30fps على الهاتف وتتوقف كلياً عند الخروج للخلفية
               val clock = remember { VisualizerClock() }
 
               LaunchedEffect(isPlaying, isResumed, isTv) {
@@ -1464,7 +1556,6 @@ jobs:
                   }
               }
 
-              // إبقاء الشاشة مضاءة على التلفاز فقط في الوضع المسرحي لحماية بطارية الهاتف
               DisposableEffect(isFullScreen, isTv) {
                   if (isFullScreen && isTv) {
                       activity?.window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -1675,7 +1766,6 @@ jobs:
                   onDispose { player.removeListener(listener) }
               }
 
-              // تحديث شريط التقدم مرة كل ثانية فقط وعندما تكون الشاشة مفتوحة
               LaunchedEffect(player, isPlaying, isResumed) {
                   while (player != null && isPlaying && isResumed) {
                       positionMs = player.currentPosition.coerceAtLeast(0L)
@@ -1742,6 +1832,23 @@ jobs:
                   }
                   Unit
               }
+              val onStopPlayback = {
+                  player?.let {
+                      it.playWhenReady = false
+                      it.pause()
+                      it.stop()
+                      it.clearMediaItems()
+                  }
+                  isPlaying = false
+                  currentMediaId = ""
+                  currentTitle = defaultPrompt
+                  currentArtist = ""
+                  currentAlbum = ""
+                  positionMs = 0L
+                  durationMs = 0L
+                  Toast.makeText(context, context.getString(R.string.toast_stopped), Toast.LENGTH_SHORT).show()
+                  Unit
+              }
               val onNext = { player?.seekToNext(); player?.play(); Unit }
               val onPrev = { player?.seekToPrevious(); player?.play(); Unit }
               val onRewind = {
@@ -1762,7 +1869,6 @@ jobs:
                       .fillMaxSize()
                       .background(if (isIslamicActive) AuraPalette.EmeraldObsidian else AuraPalette.Obsidian)
               ) {
-                  // خلفية ثابتة موفرة للطاقة أثناء التصفح على الهاتف، ومتحركة في وضع الاستوديو والتلفاز
                   AmbientAuroraBackdrop(
                       clock = clock,
                       animate = isFullScreen || isTv,
@@ -1775,6 +1881,7 @@ jobs:
                           title = currentTitle,
                           artist = currentArtist,
                           isPlaying = isPlaying,
+                          hasActiveTrack = hasActiveTrack,
                           isTv = isTv,
                           positionMs = positionMs,
                           durationMs = durationMs,
@@ -1784,6 +1891,7 @@ jobs:
                           clock = clock,
                           onSeek = { player?.seekTo(it) },
                           onPlayPause = onPlayPause,
+                          onStopPlayback = onStopPlayback,
                           onNext = onNext,
                           onPrev = onPrev,
                           onRewind = onRewind,
@@ -1802,8 +1910,10 @@ jobs:
                           AuraTopBar(
                               isTv = isTv,
                               isPlaying = isPlaying,
+                              hasActiveTrack = hasActiveTrack,
                               isIslamic = isIslamicActive,
                               clock = clock,
+                              onStopPlayback = onStopPlayback,
                               onOpenStudio = { isFullScreen = true },
                               onRefresh = { if (selectedTab == 0) refreshLocal() else refreshHomeLab() },
                               onOpenSettings = { showServerDialog = true }
@@ -2017,6 +2127,7 @@ jobs:
                                       title = currentTitle,
                                       artist = currentArtist,
                                       isPlaying = isPlaying,
+                                      hasActiveTrack = hasActiveTrack,
                                       positionMs = positionMs,
                                       durationMs = durationMs,
                                       shuffleEnabled = shuffleEnabled,
@@ -2024,6 +2135,7 @@ jobs:
                                       style = effectiveStyle,
                                       clock = clock,
                                       onPlayPause = onPlayPause,
+                                      onStopPlayback = onStopPlayback,
                                       onNext = onNext,
                                       onPrev = onPrev,
                                       onRewind = onRewind,
@@ -2295,8 +2407,10 @@ jobs:
           fun AuraTopBar(
               isTv: Boolean,
               isPlaying: Boolean,
+              hasActiveTrack: Boolean,
               isIslamic: Boolean,
               clock: VisualizerClock,
+              onStopPlayback: () -> Unit,
               onOpenStudio: () -> Unit,
               onRefresh: () -> Unit,
               onOpenSettings: () -> Unit
@@ -2337,6 +2451,16 @@ jobs:
                   }
 
                   Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                      if (hasActiveTrack) {
+                          AuraIconButton(
+                              icon = Icons.Default.Stop,
+                              contentDescription = stringResource(R.string.cd_stop),
+                              onClick = onStopPlayback,
+                              tint = AuraPalette.Danger,
+                              glass = true,
+                              size = 40
+                          )
+                      }
                       AuraIconButton(
                           icon = Icons.Default.AutoAwesome,
                           contentDescription = stringResource(R.string.cd_fullscreen),
@@ -2972,6 +3096,7 @@ jobs:
               title: String,
               artist: String,
               isPlaying: Boolean,
+              hasActiveTrack: Boolean,
               positionMs: Long,
               durationMs: Long,
               shuffleEnabled: Boolean,
@@ -2979,6 +3104,7 @@ jobs:
               style: Int,
               clock: VisualizerClock,
               onPlayPause: () -> Unit,
+              onStopPlayback: () -> Unit,
               onNext: () -> Unit,
               onPrev: () -> Unit,
               onRewind: () -> Unit,
@@ -3126,6 +3252,13 @@ jobs:
                           tint = if (shuffleEnabled) activeAccent else AuraPalette.MutedText,
                           glass = shuffleEnabled
                       )
+                      AuraIconButton(
+                          icon = Icons.Default.Stop,
+                          contentDescription = stringResource(R.string.cd_stop),
+                          onClick = onStopPlayback,
+                          tint = if (hasActiveTrack) AuraPalette.Danger else AuraPalette.MutedText,
+                          glass = hasActiveTrack
+                      )
                       PlaybackModeButton(playbackMode = playbackMode, accentColor = activeAccent, onClick = onCyclePlaybackMode)
                   }
               }
@@ -3136,6 +3269,7 @@ jobs:
               title: String,
               artist: String,
               isPlaying: Boolean,
+              hasActiveTrack: Boolean,
               isTv: Boolean,
               positionMs: Long,
               durationMs: Long,
@@ -3145,6 +3279,7 @@ jobs:
               clock: VisualizerClock,
               onSeek: (Long) -> Unit,
               onPlayPause: () -> Unit,
+              onStopPlayback: () -> Unit,
               onNext: () -> Unit,
               onPrev: () -> Unit,
               onRewind: () -> Unit,
@@ -3342,13 +3477,25 @@ jobs:
                               horizontalArrangement = Arrangement.SpaceBetween,
                               verticalAlignment = Alignment.CenterVertically
                           ) {
-                              AuraIconButton(
-                                  icon = if (isTv) Icons.Default.FullscreenExit else Icons.Default.KeyboardArrowDown,
-                                  contentDescription = stringResource(R.string.cd_exit_fullscreen),
-                                  onClick = onExit,
-                                  glass = true,
-                                  size = 44
-                              )
+                              Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                  AuraIconButton(
+                                      icon = if (isTv) Icons.Default.FullscreenExit else Icons.Default.KeyboardArrowDown,
+                                      contentDescription = stringResource(R.string.cd_exit_fullscreen),
+                                      onClick = onExit,
+                                      glass = true,
+                                      size = 44
+                                  )
+                                  if (hasActiveTrack) {
+                                      AuraIconButton(
+                                          icon = Icons.Default.Stop,
+                                          contentDescription = stringResource(R.string.cd_stop),
+                                          onClick = { bumpActivity(); onStopPlayback() },
+                                          tint = AuraPalette.Danger,
+                                          glass = true,
+                                          size = 44
+                                      )
+                                  }
+                              }
 
                               Text(
                                   if (isIslamic) stringResource(R.string.quran_header) else stringResource(R.string.now_playing_header),
