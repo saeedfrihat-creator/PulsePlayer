@@ -63,8 +63,8 @@ jobs:
                   applicationId = "com.pulse.player"
                   minSdk = 26
                   targetSdk = 35
-                  versionCode = 7
-                  versionName = "2.0-Aura"
+                  versionCode = 8
+                  versionName = "2.1-Cinema"
               }
 
               buildTypes {
@@ -1139,13 +1139,20 @@ jobs:
           import androidx.activity.enableEdgeToEdge
           import androidx.activity.result.IntentSenderRequest
           import androidx.activity.result.contract.ActivityResultContracts
+          import androidx.compose.animation.AnimatedVisibility
+          import androidx.compose.animation.core.animateDpAsState
           import androidx.compose.animation.core.animateFloatAsState
+          import androidx.compose.animation.core.tween
+          import androidx.compose.animation.fadeIn
+          import androidx.compose.animation.fadeOut
           import androidx.compose.foundation.BorderStroke
           import androidx.compose.foundation.Canvas
           import androidx.compose.foundation.background
           import androidx.compose.foundation.basicMarquee
           import androidx.compose.foundation.border
           import androidx.compose.foundation.clickable
+          import androidx.compose.foundation.focusable
+          import androidx.compose.foundation.interaction.MutableInteractionSource
           import androidx.compose.foundation.layout.*
           import androidx.compose.foundation.lazy.LazyColumn
           import androidx.compose.foundation.lazy.grid.GridCells
@@ -1165,6 +1172,8 @@ jobs:
           import androidx.compose.ui.Modifier
           import androidx.compose.ui.draw.clip
           import androidx.compose.ui.draw.scale
+          import androidx.compose.ui.focus.FocusRequester
+          import androidx.compose.ui.focus.focusRequester
           import androidx.compose.ui.focus.onFocusChanged
           import androidx.compose.ui.geometry.CornerRadius
           import androidx.compose.ui.geometry.Offset
@@ -1176,6 +1185,11 @@ jobs:
           import androidx.compose.ui.graphics.drawscope.Stroke
           import androidx.compose.ui.graphics.drawscope.rotate
           import androidx.compose.ui.graphics.vector.ImageVector
+          import androidx.compose.ui.input.key.Key
+          import androidx.compose.ui.input.key.KeyEventType
+          import androidx.compose.ui.input.key.key
+          import androidx.compose.ui.input.key.onPreviewKeyEvent
+          import androidx.compose.ui.input.key.type
           import androidx.compose.ui.platform.LocalConfiguration
           import androidx.compose.ui.platform.LocalContext
           import androidx.compose.ui.platform.LocalLayoutDirection
@@ -1188,6 +1202,9 @@ jobs:
           import androidx.compose.ui.unit.dp
           import androidx.compose.ui.unit.sp
           import androidx.core.content.ContextCompat
+          import androidx.core.view.WindowCompat
+          import androidx.core.view.WindowInsetsCompat
+          import androidx.core.view.WindowInsetsControllerCompat
           import androidx.media3.common.MediaItem
           import androidx.media3.common.MediaMetadata
           import androidx.media3.common.Player
@@ -1203,7 +1220,6 @@ jobs:
           import kotlin.math.cos
           import kotlin.math.sin
 
-          // لوحة ألوان Aura الحديثة
           private object AuraPalette {
               val Obsidian = Color(0xFF07070E)
               val DeepNight = Color(0xFF0D0D1A)
@@ -1229,7 +1245,6 @@ jobs:
               )
           }
 
-          // 0 = Repeat All, 1 = Repeat One, 2 = Play Once (Stop After Track), 3 = Repeat Off
           private const val MODE_REPEAT_ALL = 0
           private const val MODE_REPEAT_ONE = 1
           private const val MODE_PLAY_ONCE = 2
@@ -1336,7 +1351,6 @@ jobs:
               var shuffleEnabled by remember { mutableStateOf(false) }
               var playbackMode by remember { mutableIntStateOf(prefs.getInt("playback_mode", MODE_REPEAT_ALL)) }
 
-              // محرك أنيميشن 60fps للخلفية الحية والمشغل
               var animPhase by remember { mutableFloatStateOf(0f) }
               var activeAmplitude by remember { mutableFloatStateOf(0f) }
 
@@ -1645,7 +1659,6 @@ jobs:
               }
 
               Box(modifier = Modifier.fillMaxSize().background(AuraPalette.Obsidian)) {
-                  // خلفية الأضواء الحية العائمة لكامل التطبيق
                   AmbientAuroraBackdrop(
                       phase = animPhase,
                       amplitude = activeAmplitude,
@@ -1682,7 +1695,6 @@ jobs:
                               .fillMaxSize()
                               .statusBarsPadding()
                       ) {
-                          // الشريط العلوي الزجاجي العصري
                           AuraTopBar(
                               isTv = isTv,
                               isPlaying = isPlaying,
@@ -1695,7 +1707,6 @@ jobs:
 
                           val libraryContent: @Composable (Modifier) -> Unit = { mod ->
                               Column(modifier = mod) {
-                                  // مبدّل زجاجي بشكل كبسولة (Phone / Home Lab)
                                   GlassSegmentedSwitch(
                                       leftLabel = if (isTv) {
                                           stringResource(R.string.tab_device, localFolders.size)
@@ -1714,7 +1725,6 @@ jobs:
                                       modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
                                   )
 
-                                  // شريط بحث زجاجي أنيق
                                   GlassSearchBar(
                                       query = searchQuery,
                                       onQueryChange = { searchQuery = it },
@@ -1726,7 +1736,6 @@ jobs:
                                       modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
                                   )
 
-                                  // ترويسة المجلد المفتوح
                                   if (currentOpenFolder != null) {
                                       val openSongs = activeFolders.firstOrNull { it.name == currentOpenFolder }?.songs ?: emptyList()
                                       OpenFolderHeader(
@@ -1828,7 +1837,6 @@ jobs:
                                               }
                                           }
                                       } else {
-                                          // شبكة بطاقات المجلدات العصرية (2 أعمدة)
                                           LazyVerticalGrid(
                                               columns = GridCells.Fixed(2),
                                               modifier = Modifier.fillMaxSize(),
@@ -1929,7 +1937,6 @@ jobs:
                           } else {
                               Box(modifier = Modifier.fillMaxSize()) {
                                   libraryContent(Modifier.fillMaxSize())
-                                  // الشريط العائم الزجاجي للموبايل فوق شريط النظام
                                   FloatingGlassMiniDock(
                                       title = currentTitle,
                                       artist = currentArtist,
@@ -1954,7 +1961,6 @@ jobs:
                   }
               }
 
-              // نافذة إدارة الملف المحلي (حذف أو إخفاء)
               songToManage?.let { song ->
                   AlertDialog(
                       onDismissRequest = { songToManage = null },
@@ -2003,7 +2009,6 @@ jobs:
                   )
               }
 
-              // نافذة إعدادات الهوم لاب (SMB + Navidrome + استعادة المخفي)
               if (showServerDialog) {
                   AlertDialog(
                       onDismissRequest = { showServerDialog = false },
@@ -2210,15 +2215,13 @@ jobs:
                               )
                           }
                       }
-                      Column {
-                          Text(
-                              stringResource(R.string.app_name),
-                              fontSize = 20.sp,
-                              fontWeight = FontWeight.ExtraBold,
-                              letterSpacing = 0.5.sp,
-                              color = Color.White
-                          )
-                      }
+                      Text(
+                          stringResource(R.string.app_name),
+                          fontSize = 20.sp,
+                          fontWeight = FontWeight.ExtraBold,
+                          letterSpacing = 0.5.sp,
+                          color = Color.White
+                      )
                   }
 
                   Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -2454,7 +2457,6 @@ jobs:
                       .onFocusChanged { isFocused = it.isFocused }
                       .clickable(onClick = onOpen)
               ) {
-                  // حلقات زخرفية شفافة في خلفية البطاقة
                   Canvas(modifier = Modifier.fillMaxSize()) {
                       val c = Offset(size.width * 0.88f, size.height * 0.16f)
                       drawCircle(Color(0x16FFFFFF), radius = size.minDimension * 0.42f, center = c)
@@ -2687,7 +2689,6 @@ jobs:
                           .padding(start = 12.dp, end = 10.dp, top = 10.dp, bottom = 10.dp),
                       verticalAlignment = Alignment.CenterVertically
                   ) {
-                      // قرص مصغّر دوّار
                       MiniSpinningDisc(phase = phase, isPlaying = isPlaying)
                       Spacer(Modifier.width(12.dp))
                       Column(modifier = Modifier.weight(1f)) {
@@ -2731,7 +2732,6 @@ jobs:
                       }
                   }
 
-                  // شريط تقدم نيون متدرج مدمج أسفل الكبسولة العائمة
                   CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
                       Box(
                           modifier = Modifier
@@ -2983,8 +2983,76 @@ jobs:
               onCycleStyle: () -> Unit,
               onExit: () -> Unit
           ) {
+              val context = LocalContext.current
+              val activity = context as? Activity
+
               var isDragging by remember { mutableStateOf(false) }
               var dragPos by remember { mutableFloatStateOf(0f) }
+
+              // حالة الإخفاء التلقائي للوضع المسرحي (Auto-Hide Cinema Mode)
+              var controlsVisible by remember { mutableStateOf(true) }
+              var interactionTick by remember { mutableIntStateOf(0) }
+
+              val rootFocusRequester = remember { FocusRequester() }
+              val playPauseFocusRequester = remember { FocusRequester() }
+
+              fun bumpActivity() {
+                  interactionTick++
+              }
+
+              // إخفاء الأزرار تلقائياً بعد 6 ثوانٍ أثناء التشغيل
+              LaunchedEffect(controlsVisible, interactionTick, isPlaying, isDragging) {
+                  if (controlsVisible && isPlaying && !isDragging) {
+                      delay(6000L)
+                      controlsVisible = false
+                  }
+              }
+
+              // نقل التركيز بسلاسة لريموت Android TV عند الإخفاء أو الإظهار
+              LaunchedEffect(controlsVisible) {
+                  if (!controlsVisible) {
+                      runCatching { rootFocusRequester.requestFocus() }
+                  } else if (isTv) {
+                      delay(120L)
+                      runCatching { playPauseFocusRequester.requestFocus() }
+                  }
+              }
+
+              // إخفاء أشرطة النظام في الوضع المسرحي واستعادتها عند الإظهار أو الخروج
+              DisposableEffect(controlsVisible) {
+                  val window = activity?.window
+                  if (window != null) {
+                      val controller = WindowCompat.getInsetsController(window, window.decorView)
+                      controller.systemBarsBehavior =
+                          WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                      if (!controlsVisible) {
+                          controller.hide(WindowInsetsCompat.Type.systemBars())
+                      } else {
+                          controller.show(WindowInsetsCompat.Type.systemBars())
+                      }
+                  }
+                  onDispose {}
+              }
+
+              DisposableEffect(Unit) {
+                  onDispose {
+                      activity?.window?.let { win ->
+                          WindowCompat.getInsetsController(win, win.decorView)
+                              .show(WindowInsetsCompat.Type.systemBars())
+                      }
+                  }
+              }
+
+              val stageTopPad by animateDpAsState(
+                  targetValue = if (controlsVisible) 64.dp else 16.dp,
+                  animationSpec = tween(550),
+                  label = "stageTop"
+              )
+              val stageBottomPad by animateDpAsState(
+                  targetValue = if (controlsVisible) 210.dp else 64.dp,
+                  animationSpec = tween(550),
+                  label = "stageBottom"
+              )
 
               val styleName = when (style) {
                   0 -> stringResource(R.string.style_neon_bars)
@@ -2993,193 +3061,314 @@ jobs:
                   else -> stringResource(R.string.style_stardust)
               }
 
-              Box(modifier = Modifier.fillMaxSize()) {
+              val progress = if (durationMs > 0L) (positionMs.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f) else 0f
+
+              Box(
+                  modifier = Modifier
+                      .fillMaxSize()
+                      .focusRequester(rootFocusRequester)
+                      .focusable()
+                      .onPreviewKeyEvent { keyEvent ->
+                          if (keyEvent.type == KeyEventType.KeyDown) {
+                              if (!controlsVisible) {
+                                  if (keyEvent.key == Key.Back) {
+                                      return@onPreviewKeyEvent false
+                                  }
+                                  controlsVisible = true
+                                  bumpActivity()
+                                  return@onPreviewKeyEvent true
+                              } else {
+                                  bumpActivity()
+                              }
+                          }
+                          false
+                      }
+                      .clickable(
+                          interactionSource = remember { MutableInteractionSource() },
+                          indication = null
+                      ) {
+                          controlsVisible = !controlsVisible
+                          if (controlsVisible) bumpActivity()
+                      }
+              ) {
+                  // المشهد الموسيقي الحي يتمدد تلقائياً ليملأ الشاشة عند اختفاء الأزرار
                   VisualizerStage(
                       style = style,
                       phase = phase,
                       amplitude = amplitude,
                       modifier = Modifier
                           .fillMaxSize()
-                          .padding(top = 64.dp, bottom = 210.dp)
+                          .padding(top = stageTopPad, bottom = stageBottomPad)
                   )
 
-                  Column(
+                  // عرض مسرحي فني بسيط وهادئ لاسم الأغنية فقط عند اختفاء الأزرار
+                  AnimatedVisibility(
+                      visible = !controlsVisible,
+                      enter = fadeIn(tween(650)),
+                      exit = fadeOut(tween(250)),
                       modifier = Modifier
-                          .fillMaxSize()
-                          .statusBarsPadding()
-                          .navigationBarsPadding()
-                          .padding(horizontal = 20.dp, vertical = 12.dp),
-                      verticalArrangement = Arrangement.SpaceBetween
+                          .align(Alignment.BottomCenter)
+                          .fillMaxWidth()
                   ) {
-                      // ترويسة الاستوديو العلوية
-                      Row(
-                          modifier = Modifier.fillMaxWidth(),
-                          horizontalArrangement = Arrangement.SpaceBetween,
-                          verticalAlignment = Alignment.CenterVertically
-                      ) {
-                          AuraIconButton(
-                              icon = if (isTv) Icons.Default.FullscreenExit else Icons.Default.KeyboardArrowDown,
-                              contentDescription = stringResource(R.string.cd_exit_fullscreen),
-                              onClick = onExit,
-                              glass = true,
-                              size = 44
-                          )
-
-                          Text(
-                              stringResource(R.string.now_playing_header),
-                              fontSize = 11.sp,
-                              letterSpacing = 2.sp,
-                              fontWeight = FontWeight.Bold,
-                              color = AuraPalette.MutedText
-                          )
-
-                          Surface(
-                              onClick = onCycleStyle,
-                              shape = RoundedCornerShape(24.dp),
-                              color = Color(0x28FFFFFF),
-                              border = BorderStroke(1.dp, Color(0x5506B6D4))
-                          ) {
-                              Row(
-                                  modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                                  verticalAlignment = Alignment.CenterVertically,
-                                  horizontalArrangement = Arrangement.spacedBy(6.dp)
-                              ) {
-                                  Icon(
-                                      Icons.Default.Palette,
-                                      contentDescription = stringResource(R.string.cd_change_style),
-                                      tint = AuraPalette.Cyan,
-                                      modifier = Modifier.size(16.dp)
-                                  )
-                                  Text(styleName, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
-                              }
-                          }
-                      }
-
-                      Spacer(Modifier.weight(1f))
-
-                      // لوحة التحكم الزجاجية السفلية
                       Column(
                           modifier = Modifier
                               .fillMaxWidth()
-                              .clip(RoundedCornerShape(28.dp))
-                              .background(AuraPalette.GlassStrong)
-                              .border(1.dp, AuraPalette.GlassBorder, RoundedCornerShape(28.dp))
-                              .padding(horizontal = 22.dp, vertical = 18.dp),
+                              .padding(horizontal = 28.dp, vertical = 18.dp),
                           horizontalAlignment = Alignment.CenterHorizontally
                       ) {
-                          if (playbackMode == MODE_PLAY_ONCE) {
-                              Box(
-                                  modifier = Modifier
-                                      .padding(bottom = 8.dp)
-                                      .clip(RoundedCornerShape(10.dp))
-                                      .background(AuraPalette.PlayOnceGradient)
-                                      .padding(horizontal = 10.dp, vertical = 3.dp)
-                              ) {
-                                  Text(
-                                      stringResource(R.string.badge_play_once),
-                                      fontSize = 10.sp,
-                                      fontWeight = FontWeight.ExtraBold,
-                                      color = Color.White
-                                  )
-                              }
-                          }
-
                           Text(
                               title,
-                              fontSize = if (isTv) 26.sp else 21.sp,
-                              fontWeight = FontWeight.Bold,
-                              color = Color.White,
+                              fontSize = if (isTv) 22.sp else 16.sp,
+                              fontWeight = FontWeight.SemiBold,
+                              color = Color.White.copy(alpha = 0.78f),
                               maxLines = 1,
                               modifier = Modifier.basicMarquee()
                           )
                           if (artist.isNotBlank()) {
-                              Spacer(Modifier.height(4.dp))
+                              Spacer(Modifier.height(2.dp))
                               Text(
                                   artist,
-                                  fontSize = if (isTv) 16.sp else 13.sp,
-                                  color = AuraPalette.MutedText,
+                                  fontSize = if (isTv) 14.sp else 12.sp,
+                                  color = AuraPalette.MutedText.copy(alpha = 0.72f),
                                   maxLines = 1,
                                   overflow = TextOverflow.Ellipsis
                               )
                           }
-
                           Spacer(Modifier.height(10.dp))
-
                           CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                              val shownPos = if (isDragging) dragPos.toLong() else positionMs
-                              if (isTv) {
-                                  val progress = if (durationMs > 0L) (positionMs.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f) else 0f
+                              Box(
+                                  modifier = Modifier
+                                      .fillMaxWidth(if (isTv) 0.45f else 0.72f)
+                                      .height(2.5.dp)
+                                      .clip(RoundedCornerShape(2.dp))
+                                      .background(Color(0x22FFFFFF))
+                              ) {
                                   Box(
                                       modifier = Modifier
-                                          .fillMaxWidth()
-                                          .height(7.dp)
-                                          .clip(RoundedCornerShape(4.dp))
-                                          .background(Color(0x28FFFFFF))
-                                  ) {
-                                      Box(
-                                          modifier = Modifier
-                                              .fillMaxWidth(progress)
-                                              .fillMaxHeight()
-                                              .background(AuraPalette.PrimaryGradient)
-                                      )
-                                  }
-                              } else {
-                                  val safeMax = durationMs.coerceAtLeast(1L).toFloat()
-                                  Slider(
-                                      value = shownPos.coerceIn(0L, durationMs.coerceAtLeast(1L)).toFloat(),
-                                      onValueChange = {
-                                          isDragging = true
-                                          dragPos = it
-                                      },
-                                      onValueChangeFinished = {
-                                          onSeek(dragPos.toLong())
-                                          isDragging = false
-                                      },
-                                      valueRange = 0f..safeMax,
-                                      colors = SliderDefaults.colors(
-                                          thumbColor = AuraPalette.Cyan,
-                                          activeTrackColor = AuraPalette.Violet,
-                                          inactiveTrackColor = Color(0x30FFFFFF)
-                                      ),
-                                      modifier = Modifier.fillMaxWidth()
+                                          .fillMaxWidth(progress)
+                                          .fillMaxHeight()
+                                          .background(AuraPalette.PrimaryGradient)
                                   )
                               }
+                          }
+                      }
+                  }
 
-                              Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                  Text(formatTime(shownPos), fontSize = 12.sp, color = AuraPalette.MutedText)
-                                  Text(formatTime(durationMs), fontSize = 12.sp, color = AuraPalette.MutedText)
+                  // أزرار التحكم الكاملة مع تلاشي ناعم
+                  AnimatedVisibility(
+                      visible = controlsVisible,
+                      enter = fadeIn(tween(300)),
+                      exit = fadeOut(tween(600)),
+                      modifier = Modifier.fillMaxSize()
+                  ) {
+                      Column(
+                          modifier = Modifier
+                              .fillMaxSize()
+                              .statusBarsPadding()
+                              .navigationBarsPadding()
+                              .padding(horizontal = 20.dp, vertical = 12.dp),
+                          verticalArrangement = Arrangement.SpaceBetween
+                      ) {
+                          Row(
+                              modifier = Modifier.fillMaxWidth(),
+                              horizontalArrangement = Arrangement.SpaceBetween,
+                              verticalAlignment = Alignment.CenterVertically
+                          ) {
+                              AuraIconButton(
+                                  icon = if (isTv) Icons.Default.FullscreenExit else Icons.Default.KeyboardArrowDown,
+                                  contentDescription = stringResource(R.string.cd_exit_fullscreen),
+                                  onClick = onExit,
+                                  glass = true,
+                                  size = 44
+                              )
+
+                              Text(
+                                  stringResource(R.string.now_playing_header),
+                                  fontSize = 11.sp,
+                                  letterSpacing = 2.sp,
+                                  fontWeight = FontWeight.Bold,
+                                  color = AuraPalette.MutedText
+                              )
+
+                              Surface(
+                                  onClick = {
+                                      bumpActivity()
+                                      onCycleStyle()
+                                  },
+                                  shape = RoundedCornerShape(24.dp),
+                                  color = Color(0x28FFFFFF),
+                                  border = BorderStroke(1.dp, Color(0x5506B6D4))
+                              ) {
+                                  Row(
+                                      modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                      verticalAlignment = Alignment.CenterVertically,
+                                      horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                  ) {
+                                      Icon(
+                                          Icons.Default.Palette,
+                                          contentDescription = stringResource(R.string.cd_change_style),
+                                          tint = AuraPalette.Cyan,
+                                          modifier = Modifier.size(16.dp)
+                                      )
+                                      Text(styleName, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+                                  }
+                              }
+                          }
+
+                          Spacer(Modifier.weight(1f))
+
+                          Column(
+                              modifier = Modifier
+                                  .fillMaxWidth()
+                                  .clip(RoundedCornerShape(28.dp))
+                                  .background(AuraPalette.GlassStrong)
+                                  .border(1.dp, AuraPalette.GlassBorder, RoundedCornerShape(28.dp))
+                                  .clickable(
+                                      interactionSource = remember { MutableInteractionSource() },
+                                      indication = null
+                                  ) { bumpActivity() }
+                                  .padding(horizontal = 22.dp, vertical = 18.dp),
+                              horizontalAlignment = Alignment.CenterHorizontally
+                          ) {
+                              if (playbackMode == MODE_PLAY_ONCE) {
+                                  Box(
+                                      modifier = Modifier
+                                          .padding(bottom = 8.dp)
+                                          .clip(RoundedCornerShape(10.dp))
+                                          .background(AuraPalette.PlayOnceGradient)
+                                          .padding(horizontal = 10.dp, vertical = 3.dp)
+                                  ) {
+                                      Text(
+                                          stringResource(R.string.badge_play_once),
+                                          fontSize = 10.sp,
+                                          fontWeight = FontWeight.ExtraBold,
+                                          color = Color.White
+                                      )
+                                  }
+                              }
+
+                              Text(
+                                  title,
+                                  fontSize = if (isTv) 26.sp else 21.sp,
+                                  fontWeight = FontWeight.Bold,
+                                  color = Color.White,
+                                  maxLines = 1,
+                                  modifier = Modifier.basicMarquee()
+                              )
+                              if (artist.isNotBlank()) {
+                                  Spacer(Modifier.height(4.dp))
+                                  Text(
+                                      artist,
+                                      fontSize = if (isTv) 16.sp else 13.sp,
+                                      color = AuraPalette.MutedText,
+                                      maxLines = 1,
+                                      overflow = TextOverflow.Ellipsis
+                                  )
                               }
 
                               Spacer(Modifier.height(10.dp))
 
-                              Row(
-                                  modifier = Modifier.fillMaxWidth(),
-                                  horizontalArrangement = Arrangement.SpaceEvenly,
-                                  verticalAlignment = Alignment.CenterVertically
-                              ) {
-                                  AuraIconButton(
-                                      icon = Icons.Default.Shuffle,
-                                      contentDescription = stringResource(R.string.cd_shuffle),
-                                      onClick = onToggleShuffle,
-                                      tint = if (shuffleEnabled) AuraPalette.Cyan else AuraPalette.MutedText,
-                                      glass = shuffleEnabled
-                                  )
-                                  AuraIconButton(Icons.Default.SkipPrevious, stringResource(R.string.cd_previous), onPrev, glass = true)
+                              CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                                  val shownPos = if (isDragging) dragPos.toLong() else positionMs
                                   if (isTv) {
-                                      AuraIconButton(Icons.Default.FastRewind, stringResource(R.string.cd_rewind), onRewind, glass = true)
+                                      Box(
+                                          modifier = Modifier
+                                              .fillMaxWidth()
+                                              .height(7.dp)
+                                              .clip(RoundedCornerShape(4.dp))
+                                              .background(Color(0x28FFFFFF))
+                                      ) {
+                                          Box(
+                                              modifier = Modifier
+                                                  .fillMaxWidth(progress)
+                                                  .fillMaxHeight()
+                                                  .background(AuraPalette.PrimaryGradient)
+                                          )
+                                      }
+                                  } else {
+                                      val safeMax = durationMs.coerceAtLeast(1L).toFloat()
+                                      Slider(
+                                          value = shownPos.coerceIn(0L, durationMs.coerceAtLeast(1L)).toFloat(),
+                                          onValueChange = {
+                                              isDragging = true
+                                              dragPos = it
+                                              bumpActivity()
+                                          },
+                                          onValueChangeFinished = {
+                                              onSeek(dragPos.toLong())
+                                              isDragging = false
+                                              bumpActivity()
+                                          },
+                                          valueRange = 0f..safeMax,
+                                          colors = SliderDefaults.colors(
+                                              thumbColor = AuraPalette.Cyan,
+                                              activeTrackColor = AuraPalette.Violet,
+                                              inactiveTrackColor = Color(0x30FFFFFF)
+                                          ),
+                                          modifier = Modifier.fillMaxWidth()
+                                      )
                                   }
-                                  AuraIconButton(
-                                      icon = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                                      contentDescription = stringResource(R.string.cd_play_pause),
-                                      onClick = onPlayPause,
-                                      gradient = true,
-                                      size = 66
-                                  )
-                                  if (isTv) {
-                                      AuraIconButton(Icons.Default.FastForward, stringResource(R.string.cd_forward), onForward, glass = true)
+
+                                  Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                      Text(formatTime(shownPos), fontSize = 12.sp, color = AuraPalette.MutedText)
+                                      Text(formatTime(durationMs), fontSize = 12.sp, color = AuraPalette.MutedText)
                                   }
-                                  AuraIconButton(Icons.Default.SkipNext, stringResource(R.string.cd_next), onNext, glass = true)
-                                  PlaybackModeButton(playbackMode = playbackMode, onClick = onCyclePlaybackMode)
+
+                                  Spacer(Modifier.height(10.dp))
+
+                                  Row(
+                                      modifier = Modifier.fillMaxWidth(),
+                                      horizontalArrangement = Arrangement.SpaceEvenly,
+                                      verticalAlignment = Alignment.CenterVertically
+                                  ) {
+                                      AuraIconButton(
+                                          icon = Icons.Default.Shuffle,
+                                          contentDescription = stringResource(R.string.cd_shuffle),
+                                          onClick = { bumpActivity(); onToggleShuffle() },
+                                          tint = if (shuffleEnabled) AuraPalette.Cyan else AuraPalette.MutedText,
+                                          glass = shuffleEnabled
+                                      )
+                                      AuraIconButton(
+                                          icon = Icons.Default.SkipPrevious,
+                                          contentDescription = stringResource(R.string.cd_previous),
+                                          onClick = { bumpActivity(); onPrev() },
+                                          glass = true
+                                      )
+                                      if (isTv) {
+                                          AuraIconButton(
+                                              icon = Icons.Default.FastRewind,
+                                              contentDescription = stringResource(R.string.cd_rewind),
+                                              onClick = { bumpActivity(); onRewind() },
+                                              glass = true
+                                          )
+                                      }
+                                      AuraIconButton(
+                                          icon = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                          contentDescription = stringResource(R.string.cd_play_pause),
+                                          onClick = { bumpActivity(); onPlayPause() },
+                                          gradient = true,
+                                          size = 66,
+                                          modifier = Modifier.focusRequester(playPauseFocusRequester)
+                                      )
+                                      if (isTv) {
+                                          AuraIconButton(
+                                              icon = Icons.Default.FastForward,
+                                              contentDescription = stringResource(R.string.cd_forward),
+                                              onClick = { bumpActivity(); onForward() },
+                                              glass = true
+                                          )
+                                      }
+                                      AuraIconButton(
+                                          icon = Icons.Default.SkipNext,
+                                          contentDescription = stringResource(R.string.cd_next),
+                                          onClick = { bumpActivity(); onNext() },
+                                          glass = true
+                                      )
+                                      PlaybackModeButton(
+                                          playbackMode = playbackMode,
+                                          onClick = { bumpActivity(); onCyclePlaybackMode() }
+                                      )
+                                  }
                               }
                           }
                       }
@@ -3204,7 +3393,6 @@ jobs:
                   val minDim = minOf(w, h)
 
                   when (style) {
-                      // 0: أسطوانة هولوغرام + طيف نيون متناظر
                       0 -> {
                           val discCenter = Offset(cx, h * 0.40f)
                           val discRadius = (minDim * 0.25f).coerceAtLeast(24f)
@@ -3286,7 +3474,6 @@ jobs:
                           }
                       }
 
-                      // 1: أمواج الشفق المتوهجة
                       1 -> {
                           val waveConfigs = listOf(
                               Triple(AuraPalette.Cyan, 1.0f, 3.2f),
@@ -3311,7 +3498,6 @@ jobs:
                           }
                       }
 
-                      // 2: الهالة الكونية 360°
                       2 -> {
                           val baseR = (minDim * 0.22f).coerceAtLeast(24f)
                           val maxRay = (minDim * 0.21f).coerceAtLeast(14f)
@@ -3346,7 +3532,6 @@ jobs:
                           drawCircle(color = AuraPalette.Cyan, radius = innerPulse, center = Offset(cx, cy), style = Stroke(2.5f))
                       }
 
-                      // 3: نبض النجوم (Stardust Pulse) — جزيئات صاعدة + موجة متناظرة في المنتصف
                       else -> {
                           val particleCount = 28
                           for (p in 0 until particleCount) {
@@ -3365,7 +3550,6 @@ jobs:
                               drawCircle(col.copy(alpha = alpha), radius = radius, center = Offset(px, py))
                           }
 
-                          // أعمدة صوتية متناظرة للأعلى والأسفل في وسط الشاشة
                           val bars = 32
                           val margin = w * 0.08f
                           val usableW = (w - margin * 2f).coerceAtLeast(10f)
@@ -3453,7 +3637,8 @@ jobs:
               tint: Color = Color.White,
               gradient: Boolean = false,
               glass: Boolean = false,
-              size: Int = 44
+              size: Int = 44,
+              modifier: Modifier = Modifier
           ) {
               var isFocused by remember { mutableStateOf(false) }
               val scale by animateFloatAsState(if (isFocused) 1.12f else 1f, label = "btnScale")
@@ -3472,7 +3657,7 @@ jobs:
 
               IconButton(
                   onClick = onClick,
-                  modifier = Modifier
+                  modifier = modifier
                       .scale(scale)
                       .size(size.dp)
                       .clip(CircleShape)
