@@ -63,8 +63,8 @@ jobs:
                   applicationId = "com.pulse.player"
                   minSdk = 26
                   targetSdk = 35
-                  versionCode = 11
-                  versionName = "2.4-TVStop"
+                  versionCode = 12
+                  versionName = "2.5-RealBeat"
               }
 
               buildTypes {
@@ -385,6 +385,334 @@ jobs:
           </manifest>
           EOF
 
+          cat << 'EOF' > app/src/main/java/com/pulse/player/AudioSpectrum.kt
+          package com.pulse.player
+
+          import androidx.annotation.OptIn
+          import androidx.media3.common.C
+          import androidx.media3.common.audio.AudioProcessor
+          import androidx.media3.common.audio.BaseAudioProcessor
+          import androidx.media3.common.util.UnstableApi
+          import java.nio.ByteBuffer
+          import java.nio.ByteOrder
+          import kotlin.math.PI
+          import kotlin.math.cos
+          import kotlin.math.log10
+          import kotlin.math.pow
+          import kotlin.math.sin
+          import kotlin.math.sqrt
+
+          data class SpectrumSnapshot(
+              var bass: Float = 0f,
+              var mid: Float = 0f,
+              var high: Float = 0f,
+              var overall: Float = 0f,
+              var beat: Float = 0f,
+              var hasFreshData: Boolean = false
+          )
+
+          object AudioSpectrumBus {
+              const val BAND_COUNT = 36
+
+              @Volatile
+              var analysisEnabled: Boolean = true
+
+              private val lock = Any()
+              private val latestBands = FloatArray(BAND_COUNT)
+              private var latestBass = 0f
+              private var latestMid = 0f
+              private var latestHigh = 0f
+              private var latestOverall = 0f
+              private var latestBeat = 0f
+              private var lastUpdateMs = 0L
+
+              fun publish(
+                  bands: FloatArray,
+                  bass: Float,
+                  mid: Float,
+                  high: Float,
+                  overall: Float,
+                  beat: Float
+              ) {
+                  synchronized(lock) {
+                      for (i in 0 until BAND_COUNT) {
+                          val incoming = bands[i]
+                          val prev = latestBands[i]
+                          latestBands[i] = if (incoming > prev) {
+                              prev + (incoming - prev) * 0.85f
+                          } else {
+                              prev + (incoming - prev) * 0.40f
+                          }
+                      }
+                      latestBass = if (bass > latestBass) bass else latestBass * 0.65f + bass * 0.35f
+                      latestMid = if (mid > latestMid) mid else latestMid * 0.65f + mid * 0.35f
+                      latestHigh = if (high > latestHigh) high else latestHigh * 0.65f + high * 0.35f
+                      latestOverall = overall
+                      if (beat > latestBeat) latestBeat = beat
+                      lastUpdateMs = System.currentTimeMillis()
+                  }
+              }
+
+              fun readSnapshot(outBands: FloatArray, outMetrics: SpectrumSnapshot) {
+                  val now = System.currentTimeMillis()
+                  synchronized(lock) {
+                      val fresh = (now - lastUpdateMs) < 350L
+                      outMetrics.hasFreshData = fresh
+                      if (fresh) {
+                          System.arraycopy(latestBands, 0, outBands, 0, BAND_COUNT)
+                          outMetrics.bass = latestBass
+                          outMetrics.mid = latestMid
+                          outMetrics.high = latestHigh
+                          outMetrics.overall = latestOverall
+                          outMetrics.beat = latestBeat
+                          latestBeat *= 0.72f
+                      } else {
+                          outBands.fill(0f)
+                          outMetrics.bass = 0f
+                          outMetrics.mid = 0f
+                          outMetrics.high = 0f
+                          outMetrics.overall = 0f
+                          outMetrics.beat = 0f
+                      }
+                  }
+              }
+
+              fun clear() {
+                  synchronized(lock) {
+                      latestBands.fill(0f)
+                      latestBass = 0f
+                      latestMid = 0f
+                      latestHigh = 0f
+                      latestOverall = 0f
+                      latestBeat = 0f
+                      lastUpdateMs = 0L
+                  }
+              }
+          }
+
+          @OptIn(UnstableApi::class)
+          class SpectrumAudioProcessor : BaseAudioProcessor() {
+              private val fftSize = 1024
+              private val sampleBuffer = FloatArray(fftSize)
+              private val fftReal = FloatArray(fftSize)
+              private val fftImag = FloatArray(fftSize)
+              private val hannWindow = FloatArray(fftSize) { i ->
+                  (0.5 * (1.0 - cos(2.0 * PI * i / (fftSize - 1)))).toFloat()
+              }
+              private val magnitudes = FloatArray(fftSize / 2)
+              private val tempBands = FloatArray(AudioSpectrumBus.BAND_COUNT)
+
+              private var sampleCursor = 0
+              private var sampleRate = 44100
+              private var channelCount = 2
+              private var encoding = C.ENCODING_PCM_16BIT
+
+              private var avgBass = 0.08f
+              private var lastBeatMs = 0L
+
+              override fun onConfigure(inputAudioFormat: AudioProcessor.AudioFormat): AudioProcessor.AudioFormat {
+                  val enc = inputAudioFormat.encoding
+                  if (enc != C.ENCODING_PCM_16BIT && enc != C.ENCODING_PCM_FLOAT) {
+                      return AudioProcessor.AudioFormat.NOT_SET
+                  }
+                  sampleRate = inputAudioFormat.sampleRate.coerceAtLeast(8000)
+                  channelCount = inputAudioFormat.channelCount.coerceAtLeast(1)
+                  encoding = enc
+                  sampleCursor = 0
+                  return inputAudioFormat
+              }
+
+              override fun queueInput(inputBuffer: ByteBuffer) {
+                  val remaining = inputBuffer.remaining()
+                  if (remaining == 0) return
+
+                  // نسخ الصوت للمخرج بدون أي تعديل لضمان نقاء الصوت 100%
+                  val output = replaceOutputBuffer(remaining)
+                  output.put(inputBuffer)
+                  output.flip()
+
+                  if (!AudioSpectrumBus.analysisEnabled) return
+
+                  val readBuf = output.duplicate().order(ByteOrder.LITTLE_ENDIAN)
+                  val channels = channelCount
+
+                  if (encoding == C.ENCODING_PCM_16BIT) {
+                      val bytesPerFrame = channels * 2
+                      val frameCount = remaining / bytesPerFrame
+                      for (f in 0 until frameCount) {
+                          var mono = 0f
+                          for (c in 0 until channels) {
+                              mono += readBuf.short.toFloat() / 32768f
+                          }
+                          mono /= channels
+                          sampleBuffer[sampleCursor++] = mono
+                          if (sampleCursor >= fftSize) {
+                              analyzeFrame()
+                              sampleCursor = 0
+                          }
+                      }
+                  } else if (encoding == C.ENCODING_PCM_FLOAT) {
+                      val bytesPerFrame = channels * 4
+                      val frameCount = remaining / bytesPerFrame
+                      for (f in 0 until frameCount) {
+                          var mono = 0f
+                          for (c in 0 until channels) {
+                              mono += readBuf.float
+                          }
+                          mono /= channels
+                          sampleBuffer[sampleCursor++] = mono
+                          if (sampleCursor >= fftSize) {
+                              analyzeFrame()
+                              sampleCursor = 0
+                          }
+                      }
+                  }
+              }
+
+              private fun analyzeFrame() {
+                  var sumSq = 0f
+                  for (i in 0 until fftSize) {
+                      val s = sampleBuffer[i]
+                      sumSq += s * s
+                      fftReal[i] = s * hannWindow[i]
+                      fftImag[i] = 0f
+                  }
+
+                  val rms = sqrt(sumSq / fftSize)
+                  if (rms < 0.0012f) {
+                      tempBands.fill(0f)
+                      avgBass *= 0.90f
+                      AudioSpectrumBus.publish(tempBands, 0f, 0f, 0f, 0f, 0f)
+                      return
+                  }
+
+                  computeFft(fftReal, fftImag)
+
+                  val half = fftSize / 2
+                  val invScale = 2f / fftSize
+                  for (i in 1 until half) {
+                      val re = fftReal[i]
+                      val im = fftImag[i]
+                      magnitudes[i] = sqrt(re * re + im * im) * invScale
+                  }
+
+                  val binHz = sampleRate.toFloat() / fftSize.toFloat()
+                  val minFreq = 38f
+                  val maxFreq = minOf(13500f, sampleRate * 0.45f)
+                  val ratio = (maxFreq / minFreq).toDouble()
+                  val bandCount = AudioSpectrumBus.BAND_COUNT
+
+                  for (b in 0 until bandCount) {
+                      val fLow = (minFreq * ratio.pow(b.toDouble() / bandCount)).toFloat()
+                      val fHigh = (minFreq * ratio.pow((b + 1).toDouble() / bandCount)).toFloat()
+                      val binStart = (fLow / binHz).toInt().coerceIn(1, half - 1)
+                      val binEnd = (fHigh / binHz).toInt().coerceIn(binStart, half - 1)
+
+                      var peak = 0f
+                      var sum = 0f
+                      val count = (binEnd - binStart + 1).coerceAtLeast(1)
+                      for (k in binStart..binEnd) {
+                          val m = magnitudes[k]
+                          sum += m
+                          if (m > peak) peak = m
+                      }
+                      val combined = peak * 0.65f + (sum / count) * 0.35f
+                      val db = 20f * log10(combined.coerceAtLeast(1e-6f))
+                      // تعويض خفيف للترددات العالية لتظهر بوضوح متوازن مع البيس
+                      val tiltDb = (b.toFloat() / bandCount) * 11f
+                      val norm = ((db + 56f + tiltDb) / 46f).coerceIn(0f, 1f)
+                      tempBands[b] = norm.pow(1.22f)
+                  }
+
+                  // حساب طاقة البيس (Bass) والوسط (Mid) والحدة (High)
+                  var bassSum = 0f
+                  for (i in 0 until 7) bassSum += tempBands[i]
+                  val bass = (bassSum / 7f).coerceIn(0f, 1f)
+
+                  var midSum = 0f
+                  for (i in 7 until 22) midSum += tempBands[i]
+                  val mid = (midSum / 15f).coerceIn(0f, 1f)
+
+                  var highSum = 0f
+                  for (i in 22 until bandCount) highSum += tempBands[i]
+                  val high = (highSum / (bandCount - 22)).coerceIn(0f, 1f)
+
+                  val overall = (rms * 3.4f).coerceIn(0f, 1f)
+
+                  // كشف ضربات الإيقاع الفعلية (Beat Onset Detection)
+                  val now = System.currentTimeMillis()
+                  val bassTrigger = bass > (avgBass * 1.24f + 0.05f) && bass > 0.22f
+                  val beat = if (bassTrigger && (now - lastBeatMs) > 130L) {
+                      lastBeatMs = now
+                      ((bass - avgBass) * 2.6f + 0.45f).coerceIn(0.45f, 1f)
+                  } else {
+                      0f
+                  }
+                  avgBass = avgBass * 0.90f + bass * 0.10f
+
+                  AudioSpectrumBus.publish(tempBands, bass, mid, high, overall, beat)
+              }
+
+              private fun computeFft(real: FloatArray, imag: FloatArray) {
+                  val n = real.size
+                  var j = 0
+                  for (i in 1 until n) {
+                      var bit = n shr 1
+                      while ((j and bit) != 0) {
+                          j = j xor bit
+                          bit = bit shr 1
+                      }
+                      j = j xor bit
+                      if (i < j) {
+                          val tr = real[i]; real[i] = real[j]; real[j] = tr
+                          val ti = imag[i]; imag[i] = imag[j]; imag[j] = ti
+                      }
+                  }
+
+                  var len = 2
+                  while (len <= n) {
+                      val ang = -2.0 * PI / len
+                      val wLenR = cos(ang).toFloat()
+                      val wLenI = sin(ang).toFloat()
+                      var i = 0
+                      while (i < n) {
+                          var wR = 1f
+                          var wI = 0f
+                          val half = len shr 1
+                          for (k in 0 until half) {
+                              val idx = i + k + half
+                              val uR = real[i + k]
+                              val uI = imag[i + k]
+                              val vR = real[idx] * wR - imag[idx] * wI
+                              val vI = real[idx] * wI + imag[idx] * wR
+                              real[i + k] = uR + vR
+                              imag[i + k] = uI + vI
+                              real[idx] = uR - vR
+                              imag[idx] = uI - vI
+                              val nextWR = wR * wLenR - wI * wLenI
+                              wI = wR * wLenI + wI * wLenR
+                              wR = nextWR
+                          }
+                          i += len
+                      }
+                      len = len shl 1
+                  }
+              }
+
+              override fun onFlush() {
+                  sampleCursor = 0
+                  avgBass = 0.08f
+                  AudioSpectrumBus.clear()
+              }
+
+              override fun onReset() {
+                  sampleCursor = 0
+                  avgBass = 0.08f
+                  AudioSpectrumBus.clear()
+              }
+          }
+          EOF
+
           cat << 'EOF' > app/src/main/java/com/pulse/player/SmbSupport.kt
           package com.pulse.player
 
@@ -688,6 +1016,7 @@ jobs:
           package com.pulse.player
 
           import android.app.PendingIntent
+          import android.content.Context
           import android.content.Intent
           import android.os.Handler
           import androidx.annotation.OptIn
@@ -697,7 +1026,10 @@ jobs:
           import androidx.media3.common.Player
           import androidx.media3.common.TrackSelectionParameters
           import androidx.media3.common.util.UnstableApi
+          import androidx.media3.exoplayer.DefaultRenderersFactory
           import androidx.media3.exoplayer.ExoPlayer
+          import androidx.media3.exoplayer.audio.AudioSink
+          import androidx.media3.exoplayer.audio.DefaultAudioSink
           import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
           import androidx.media3.session.MediaSession
           import androidx.media3.session.MediaSessionService
@@ -708,6 +1040,10 @@ jobs:
               var stopAfterCurrent: Boolean = false
                   private set
 
+              @Volatile
+              var visualizerActive: Boolean = true
+                  private set
+
               private var exoPlayerRef: WeakReference<ExoPlayer>? = null
               private var serviceRef: WeakReference<PlaybackService>? = null
 
@@ -716,6 +1052,7 @@ jobs:
                   serviceRef = WeakReference(service)
                   exoPlayerRef = WeakReference(player)
                   player.pauseAtEndOfMediaItems = stopAfterCurrent
+                  applyOffloadForVisualizerState(player, visualizerActive)
               }
 
               fun detach() {
@@ -733,7 +1070,45 @@ jobs:
                   }
               }
 
+              // عند فتح الشاشة: تفعيل قراءة الإيقاع الحقيقي (PCM FFT)
+              // عند إغلاق الشاشة/الخلفية: إيقاف التحليل وتفعيل Audio Offload لتوفير البطارية
+              @OptIn(UnstableApi::class)
+              fun setVisualizerActive(active: Boolean) {
+                  visualizerActive = active
+                  AudioSpectrumBus.analysisEnabled = active
+                  if (!active) {
+                      AudioSpectrumBus.clear()
+                  }
+                  exoPlayerRef?.get()?.let { p ->
+                      Handler(p.applicationLooper).post {
+                          applyOffloadForVisualizerState(p, active)
+                      }
+                  }
+              }
+
+              @OptIn(UnstableApi::class)
+              private fun applyOffloadForVisualizerState(player: ExoPlayer, active: Boolean) {
+                  val targetMode = if (active) {
+                      TrackSelectionParameters.AudioOffloadPreferences.AUDIO_OFFLOAD_MODE_DISABLED
+                  } else {
+                      TrackSelectionParameters.AudioOffloadPreferences.AUDIO_OFFLOAD_MODE_ENABLED
+                  }
+                  val currentMode = player.trackSelectionParameters.audioOffloadPreferences.audioOffloadMode
+                  if (currentMode == targetMode) return
+
+                  val offloadPrefs = TrackSelectionParameters.AudioOffloadPreferences.Builder()
+                      .setAudioOffloadMode(targetMode)
+                      .setIsGaplessSupportRequired(false)
+                      .setIsSpeedChangeSupportRequired(false)
+                      .build()
+                  player.trackSelectionParameters = player.trackSelectionParameters
+                      .buildUpon()
+                      .setAudioOffloadPreferences(offloadPrefs)
+                      .build()
+              }
+
               fun stopPlayback(stopService: Boolean = false) {
+                  AudioSpectrumBus.clear()
                   val p = exoPlayerRef?.get()
                   if (p != null) {
                       Handler(p.applicationLooper).post {
@@ -751,6 +1126,24 @@ jobs:
               }
           }
 
+          @OptIn(UnstableApi::class)
+          private class PulseRenderersFactory(
+              context: Context,
+              private val spectrumProcessor: SpectrumAudioProcessor
+          ) : DefaultRenderersFactory(context) {
+              override fun buildAudioSink(
+                  context: Context,
+                  enableFloatOutput: Boolean,
+                  enableAudioTrackPlaybackParams: Boolean
+              ): AudioSink {
+                  return DefaultAudioSink.Builder(context)
+                      .setEnableFloatOutput(enableFloatOutput)
+                      .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
+                      .setAudioProcessors(arrayOf(spectrumProcessor))
+                      .build()
+              }
+          }
+
           class PlaybackService : MediaSessionService() {
               private var mediaSession: MediaSession? = null
 
@@ -762,23 +1155,15 @@ jobs:
                       .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
                       .build()
 
+                  val spectrumProcessor = SpectrumAudioProcessor()
+                  val renderersFactory = PulseRenderersFactory(this, spectrumProcessor)
                   val mediaSourceFactory = DefaultMediaSourceFactory(PulseDataSourceFactory(this))
 
-                  val player = ExoPlayer.Builder(this)
+                  val player = ExoPlayer.Builder(this, renderersFactory)
                       .setMediaSourceFactory(mediaSourceFactory)
                       .setAudioAttributes(audioAttributes, true)
                       .setHandleAudioBecomingNoisy(true)
                       .setWakeMode(C.WAKE_MODE_LOCAL)
-                      .build()
-
-                  val offloadPrefs = TrackSelectionParameters.AudioOffloadPreferences.Builder()
-                      .setAudioOffloadMode(TrackSelectionParameters.AudioOffloadPreferences.AUDIO_OFFLOAD_MODE_ENABLED)
-                      .setIsGaplessSupportRequired(false)
-                      .setIsSpeedChangeSupportRequired(false)
-                      .build()
-                  player.trackSelectionParameters = player.trackSelectionParameters
-                      .buildUpon()
-                      .setAudioOffloadPreferences(offloadPrefs)
                       .build()
 
                   player.addListener(object : Player.Listener {
@@ -810,6 +1195,7 @@ jobs:
               }
 
               fun shutdownService() {
+                  AudioSpectrumBus.clear()
                   runCatching { stopForeground(STOP_FOREGROUND_REMOVE) }
                   stopSelf()
               }
@@ -818,7 +1204,6 @@ jobs:
                   return mediaSession
               }
 
-              // إيقاف الصوت والخدمة فوراً عند إزالة التطبيق من قائمة التطبيقات الأخيرة
               override fun onTaskRemoved(rootIntent: Intent?) {
                   mediaSession?.player?.let { player ->
                       player.playWhenReady = false
@@ -831,6 +1216,7 @@ jobs:
 
               override fun onDestroy() {
                   PlaybackBridge.detach()
+                  AudioSpectrumBus.clear()
                   mediaSession?.run {
                       player.release()
                       release()
@@ -1300,7 +1686,14 @@ jobs:
           @Stable
           class VisualizerClock {
               var phase by mutableFloatStateOf(0f)
-              var amplitude by mutableFloatStateOf(0f)
+              var bass by mutableFloatStateOf(0f)
+              var mid by mutableFloatStateOf(0f)
+              var high by mutableFloatStateOf(0f)
+              var overall by mutableFloatStateOf(0f)
+              var beat by mutableFloatStateOf(0f)
+              var frameTick by mutableIntStateOf(0)
+              val bands = FloatArray(AudioSpectrumBus.BAND_COUNT)
+              val peaks = FloatArray(AudioSpectrumBus.BAND_COUNT)
           }
 
           private object AuraPalette {
@@ -1381,10 +1774,12 @@ jobs:
               override fun onResume() {
                   super.onResume()
                   isResumedState.value = true
+                  PlaybackBridge.setVisualizerActive(true)
               }
 
               override fun onPause() {
                   isResumedState.value = false
+                  PlaybackBridge.setVisualizerActive(false)
                   super.onPause()
               }
 
@@ -1395,7 +1790,6 @@ jobs:
                   super.onStop()
               }
 
-              // على Android TV: عند إغلاق التطبيق بزر الرجوع يتوقف الصوت نهائياً
               override fun onDestroy() {
                   if (isFinishing && isTvDevice()) {
                       PlaybackBridge.stopPlayback(stopService = true)
@@ -1403,7 +1797,6 @@ jobs:
                   super.onDestroy()
               }
 
-              // دعم أزرار الميديا في ريموت Android TV (Stop / Play / Pause / Next / Prev)
               override fun dispatchKeyEvent(event: KeyEvent): Boolean {
                   if (event.action == KeyEvent.ACTION_DOWN) {
                       when (event.keyCode) {
@@ -1537,20 +1930,89 @@ jobs:
 
               val clock = remember { VisualizerClock() }
 
+              // قراءة الطيف الصوتي الحقيقي (FFT) بسلاسة داخل طبقة الرسم فقط
               LaunchedEffect(isPlaying, isResumed, isTv) {
                   if (!isResumed) return@LaunchedEffect
+                  val rawBands = FloatArray(AudioSpectrumBus.BAND_COUNT)
+                  val metrics = SpectrumSnapshot()
                   var lastTimeMs = System.currentTimeMillis()
-                  val frameDelayMs = if (isTv) 25L else 33L
+                  val frameDelayMs = if (isTv) 24L else 28L
+
                   while (isResumed) {
                       val now = System.currentTimeMillis()
                       val dt = ((now - lastTimeMs) / 1000f).coerceIn(0f, 0.06f)
                       lastTimeMs = now
+
                       if (isPlaying) {
-                          clock.phase += dt
-                          clock.amplitude = (clock.amplitude + dt * 3.5f).coerceAtMost(1f)
+                          AudioSpectrumBus.readSnapshot(rawBands, metrics)
+                          val spinBoost = 1f + metrics.bass * 1.4f + metrics.beat * 1.8f
+                          clock.phase += dt * spinBoost
+
+                          for (i in 0 until AudioSpectrumBus.BAND_COUNT) {
+                              val target = if (metrics.hasFreshData) rawBands[i] else 0f
+                              val cur = clock.bands[i]
+                              val next = if (target > cur) {
+                                  cur + (target - cur) * 0.62f
+                              } else {
+                                  (cur - dt * 2.1f).coerceAtLeast(target)
+                              }
+                              clock.bands[i] = next
+                              val curPeak = clock.peaks[i]
+                              clock.peaks[i] = if (next >= curPeak) next else (curPeak - dt * 0.85f).coerceAtLeast(next)
+                          }
+
+                          val targetBass = if (metrics.hasFreshData) metrics.bass else 0f
+                          val targetMid = if (metrics.hasFreshData) metrics.mid else 0f
+                          val targetHigh = if (metrics.hasFreshData) metrics.high else 0f
+                          val targetOverall = if (metrics.hasFreshData) metrics.overall else 0f
+
+                          clock.bass = if (targetBass > clock.bass) {
+                              clock.bass + (targetBass - clock.bass) * 0.65f
+                          } else {
+                              clock.bass + (targetBass - clock.bass) * 0.24f
+                          }
+                          clock.mid = if (targetMid > clock.mid) {
+                              clock.mid + (targetMid - clock.mid) * 0.55f
+                          } else {
+                              clock.mid + (targetMid - clock.mid) * 0.22f
+                          }
+                          clock.high = if (targetHigh > clock.high) {
+                              clock.high + (targetHigh - clock.high) * 0.55f
+                          } else {
+                              clock.high + (targetHigh - clock.high) * 0.25f
+                          }
+                          clock.overall = clock.overall + (targetOverall - clock.overall) * 0.35f
+                          clock.beat = if (metrics.beat > clock.beat) {
+                              metrics.beat
+                          } else {
+                              (clock.beat - dt * 3.8f).coerceAtLeast(0f)
+                          }
+                          clock.frameTick++
                       } else {
-                          clock.amplitude = (clock.amplitude - dt * 2.5f).coerceAtLeast(0f)
-                          if (clock.amplitude <= 0.001f) break
+                          var anyAlive = false
+                          for (i in 0 until AudioSpectrumBus.BAND_COUNT) {
+                              if (clock.bands[i] > 0.002f) {
+                                  clock.bands[i] = (clock.bands[i] - dt * 2.6f).coerceAtLeast(0f)
+                                  anyAlive = true
+                              } else {
+                                  clock.bands[i] = 0f
+                              }
+                              if (clock.peaks[i] > 0.002f) {
+                                  clock.peaks[i] = (clock.peaks[i] - dt * 1.8f).coerceAtLeast(0f)
+                                  anyAlive = true
+                              } else {
+                                  clock.peaks[i] = 0f
+                              }
+                          }
+                          clock.bass = (clock.bass - dt * 2.6f).coerceAtLeast(0f)
+                          clock.mid = (clock.mid - dt * 2.6f).coerceAtLeast(0f)
+                          clock.high = (clock.high - dt * 2.6f).coerceAtLeast(0f)
+                          clock.overall = (clock.overall - dt * 2.6f).coerceAtLeast(0f)
+                          clock.beat = (clock.beat - dt * 4.0f).coerceAtLeast(0f)
+                          clock.frameTick++
+                          if (!anyAlive && clock.bass <= 0.001f && clock.overall <= 0.001f && clock.beat <= 0.001f) {
+                              break
+                          }
                       }
                       delay(frameDelayMs)
                   }
@@ -1833,6 +2295,7 @@ jobs:
                   Unit
               }
               val onStopPlayback = {
+                  AudioSpectrumBus.clear()
                   player?.let {
                       it.playWhenReady = false
                       it.pause()
@@ -2358,15 +2821,20 @@ jobs:
                   if (w <= 2f || h <= 2f) return@Canvas
                   val minDim = minOf(w, h)
 
+                  if (animate) {
+                      @Suppress("UNUSED_VARIABLE")
+                      val tick = clock.frameTick
+                  }
                   val phase = if (animate) clock.phase else 0f
-                  val amplitude = if (animate) clock.amplitude else 0.15f
-                  val glowBoost = 0.18f + 0.12f * amplitude
+                  val energy = if (animate) (clock.bass * 0.65f + clock.overall * 0.35f) else 0.12f
+                  val beatLift = if (animate) clock.beat * 0.14f else 0f
+                  val glowBoost = (0.16f + 0.16f * energy + beatLift).coerceIn(0.12f, 0.45f)
 
                   val c1 = if (isIslamic) AuraPalette.EmeraldGlow else AuraPalette.Violet
                   val c2 = if (isIslamic) AuraPalette.Gold else AuraPalette.Cyan
                   val c3 = if (isIslamic) Color(0xFF0D9488) else AuraPalette.Rose
 
-                  val speedScale = if (isIslamic) 0.45f else 1.0f
+                  val speedScale = if (isIslamic) 0.35f else 0.70f
                   val p = phase * speedScale
 
                   val o1 = Offset(w * 0.22f + cos(p * 0.28f) * w * 0.14f, h * 0.18f + sin(p * 0.21f) * h * 0.10f)
@@ -2377,14 +2845,14 @@ jobs:
                       brush = Brush.radialGradient(
                           listOf(c1.copy(alpha = glowBoost), Color.Transparent),
                           center = o1,
-                          radius = minDim * 0.74f
+                          radius = minDim * (0.72f + beatLift * 0.4f)
                       ),
-                      radius = minDim * 0.74f,
+                      radius = minDim * (0.72f + beatLift * 0.4f),
                       center = o1
                   )
                   drawCircle(
                       brush = Brush.radialGradient(
-                          listOf(c2.copy(alpha = glowBoost * (if (isIslamic) 0.65f else 0.85f)), Color.Transparent),
+                          listOf(c2.copy(alpha = glowBoost * (if (isIslamic) 0.68f else 0.85f)), Color.Transparent),
                           center = o2,
                           radius = minDim * 0.68f
                       ),
@@ -2393,7 +2861,7 @@ jobs:
                   )
                   drawCircle(
                       brush = Brush.radialGradient(
-                          listOf(c3.copy(alpha = glowBoost * 0.42f), Color.Transparent),
+                          listOf(c3.copy(alpha = glowBoost * 0.45f), Color.Transparent),
                           center = o3,
                           radius = minDim * 0.55f
                       ),
@@ -3027,11 +3495,13 @@ jobs:
           @Composable
           fun MiniSpinningDisc(clock: VisualizerClock, isPlaying: Boolean, isIslamic: Boolean) {
               Canvas(modifier = Modifier.size(44.dp)) {
+                  @Suppress("UNUSED_VARIABLE")
+                  val tick = clock.frameTick
                   val c = Offset(size.width / 2f, size.height / 2f)
-                  val r = size.minDimension / 2f
+                  val r = (size.minDimension / 2f) * (0.94f + clock.bass * 0.08f)
                   val phase = if (isPlaying) clock.phase else 0f
                   if (isIslamic) {
-                      val deg = (phase * 14f) % 360f
+                      val deg = (phase * 12f) % 360f
                       val s = r * 0.62f
                       drawCircle(
                           brush = Brush.radialGradient(listOf(Color(0xFF0A4A3B), Color(0xFF041A15))),
@@ -3046,7 +3516,7 @@ jobs:
                       }
                       drawCircle(AuraPalette.Gold, radius = r * 0.22f, center = c)
                   } else {
-                      rotate(degrees = (phase * 55f) % 360f, pivot = c) {
+                      rotate(degrees = (phase * 46f) % 360f, pivot = c) {
                           drawCircle(
                               brush = Brush.radialGradient(listOf(Color(0xFF35246B), Color(0xFF0E0E1C))),
                               radius = r,
@@ -3708,23 +4178,35 @@ jobs:
                   val h = size.height
                   if (w <= 2f || h <= 2f) return@Canvas
 
+                  @Suppress("UNUSED_VARIABLE")
+                  val tick = clock.frameTick
                   val phase = clock.phase
-                  val amplitude = clock.amplitude
+                  val bass = clock.bass
+                  val mid = clock.mid
+                  val high = clock.high
+                  val overall = clock.overall
+                  val beat = clock.beat
+                  val bands = clock.bands
+                  val peaks = clock.peaks
+                  val bandCount = bands.size
+
                   val cx = w / 2f
                   val cy = h / 2f
                   val minDim = minOf(w, h)
 
                   when (style) {
+                      // 0: أسطوانة النيون — نبض حقيقي مع البيس + 36 عمود طيف FFT حقيقي
                       0 -> {
-                          val discCenter = Offset(cx, h * 0.40f)
-                          val discRadius = (minDim * 0.25f).coerceAtLeast(24f)
-                          val pulse = (1f + 0.08f * sin(phase * 5.2f) * amplitude)
+                          val discCenter = Offset(cx, h * 0.39f)
+                          val discRadius = (minDim * 0.24f).coerceAtLeast(24f)
+                          val pulse = 1f + bass * 0.14f + beat * 0.10f
 
+                          // حلقات نبض تستجيب للبيس وضربات الإيقاع
                           for (ring in 0..2) {
-                              val ringProg = ((phase * 0.55f + ring * 0.33f) % 1f)
-                              val r = discRadius * (1.06f + ringProg * 0.90f)
-                              val alpha = ((1f - ringProg) * 0.48f * amplitude).coerceIn(0f, 1f)
-                              if (alpha > 0.01f) {
+                              val baseScale = 1.12f + ring * 0.28f + bass * (0.18f + ring * 0.08f) + beat * 0.14f
+                              val r = discRadius * baseScale
+                              val alpha = ((0.14f + bass * 0.42f + beat * 0.35f) * (1f - ring * 0.26f)).coerceIn(0f, 0.85f)
+                              if (alpha > 0.02f) {
                                   drawCircle(
                                       color = when (ring) {
                                           0 -> AuraPalette.Cyan.copy(alpha = alpha)
@@ -3733,42 +4215,42 @@ jobs:
                                       },
                                       radius = r,
                                       center = discCenter,
-                                      style = Stroke(width = 3f)
+                                      style = Stroke(width = 2.5f + beat * 2.5f)
                                   )
                               }
                           }
 
-                          rotate(degrees = (phase * 44f) % 360f, pivot = discCenter) {
+                          rotate(degrees = (phase * 36f) % 360f, pivot = discCenter) {
                               drawCircle(
                                   brush = Brush.radialGradient(
                                       colors = listOf(Color(0xFF2D1E5E), Color(0xFF101020), Color(0xFF06060D)),
                                       center = discCenter,
-                                      radius = discRadius * pulse
+                                      radius = (discRadius * pulse).coerceAtLeast(10f)
                                   ),
                                   radius = discRadius * pulse,
                                   center = discCenter
                               )
-                              drawCircle(Color(0x33FFFFFF), radius = discRadius * 0.80f * pulse, center = discCenter, style = Stroke(1.6f))
-                              drawCircle(Color(0x2806B6D4), radius = discRadius * 0.60f * pulse, center = discCenter, style = Stroke(1.4f))
+                              drawCircle(Color(0x38FFFFFF), radius = discRadius * 0.80f * pulse, center = discCenter, style = Stroke(1.6f))
+                              drawCircle(Color(0x3006B6D4), radius = discRadius * 0.60f * pulse, center = discCenter, style = Stroke(1.4f))
                               drawArc(
                                   brush = AuraPalette.PrimaryGradient,
                                   startAngle = -40f,
-                                  sweepAngle = 110f,
+                                  sweepAngle = 115f,
                                   useCenter = false,
                                   topLeft = Offset(discCenter.x - discRadius * 0.88f * pulse, discCenter.y - discRadius * 0.88f * pulse),
                                   size = Size(discRadius * 1.76f * pulse, discRadius * 1.76f * pulse),
-                                  style = Stroke(width = 4.5f, cap = StrokeCap.Round)
+                                  style = Stroke(width = 4.5f + beat * 2f, cap = StrokeCap.Round)
                               )
-                              drawCircle(brush = AuraPalette.PrimaryGradient, radius = discRadius * 0.30f, center = discCenter)
+                              drawCircle(brush = AuraPalette.PrimaryGradient, radius = discRadius * (0.28f + beat * 0.05f), center = discCenter)
                               drawCircle(color = AuraPalette.Obsidian, radius = discRadius * 0.09f, center = discCenter)
                           }
 
-                          val barCount = 36
+                          // أعمدة الطيف الصوتي الحقيقي (36 نطاق تردد من البيس إلى الحدة)
                           val margin = w * 0.06f
                           val usableW = (w - margin * 2f).coerceAtLeast(10f)
-                          val step = usableW / barCount
-                          val barW = (step * 0.60f).coerceAtLeast(2f)
-                          val maxBarH = (h * 0.28f).coerceAtLeast(16f)
+                          val step = usableW / bandCount
+                          val barW = (step * 0.62f).coerceAtLeast(2f)
+                          val maxBarH = (h * 0.30f).coerceAtLeast(16f)
                           val baselineY = h * 0.94f
 
                           val barBrush = Brush.verticalGradient(
@@ -3777,14 +4259,9 @@ jobs:
                               endY = baselineY
                           )
 
-                          for (i in 0 until barCount) {
-                              val norm = i.toFloat() / (barCount - 1)
-                              val centerBoost = 1f - abs(norm - 0.5f) * 0.85f
-                              val wave1 = sin(phase * 4.8f + i * 0.42f) * 0.5f + 0.5f
-                              val wave2 = cos(phase * 7.6f - i * 0.78f) * 0.5f + 0.5f
-                              val wave3 = sin(phase * 3.0f + i * 1.18f) * 0.5f + 0.5f
-                              val energy = (0.45f * wave1 + 0.35f * wave2 + 0.20f * wave3) * centerBoost
-                              val barH = (maxBarH * (0.08f + 0.92f * energy * amplitude)).coerceAtLeast(6f)
+                          for (i in 0 until bandCount) {
+                              val level = bands[i].coerceIn(0f, 1f)
+                              val barH = (maxBarH * (0.03f + 0.97f * level)).coerceAtLeast(4f)
                               val x = margin + i * step + (step - barW) / 2f
 
                               drawRoundRect(
@@ -3793,43 +4270,69 @@ jobs:
                                   size = Size(barW, barH),
                                   cornerRadius = CornerRadius(barW / 2f, barW / 2f)
                               )
+
+                              // نقطة قمة عائمة (Peak Hold Cap) تهبط بنعومة بعد كل ضربة
+                              val peakLevel = peaks[i].coerceIn(0f, 1f)
+                              if (peakLevel > 0.04f) {
+                                  val peakY = baselineY - (maxBarH * (0.03f + 0.97f * peakLevel)) - 5f
+                                  drawRoundRect(
+                                      color = Color(0xFFE0F2FE).copy(alpha = (0.35f + peakLevel * 0.65f).coerceIn(0f, 1f)),
+                                      topLeft = Offset(x, peakY),
+                                      size = Size(barW, 3.2f),
+                                      cornerRadius = CornerRadius(2f, 2f)
+                                  )
+                              }
                           }
                       }
 
+                      // 1: أمواج الشفق — 3 طبقات موجية مرتبطة بالترددات الحقيقية (Bass / Mid / High)
                       1 -> {
-                          val waveConfigs = listOf(
-                              Triple(AuraPalette.Cyan, 1.0f, 3.2f),
-                              Triple(AuraPalette.Violet, 0.80f, 4.4f),
-                              Triple(AuraPalette.Rose, 0.62f, 2.5f)
+                          val layers = listOf(
+                              Triple(AuraPalette.Cyan, 0, bass),
+                              Triple(AuraPalette.Violet, 1, mid),
+                              Triple(AuraPalette.Rose, 2, high)
                           )
-                          waveConfigs.forEachIndexed { idx, (color, ampScale, speed) ->
+                          layers.forEach { (color, idx, layerEnergy) ->
                               val path = Path()
-                              val steps = 64
-                              val maxAmp = h * 0.23f * ampScale * (0.15f + 0.85f * amplitude)
+                              val steps = 60
+                              val maxAmp = h * (0.28f - idx * 0.04f)
                               for (s in 0..steps) {
                                   val t = s.toFloat() / steps
                                   val x = t * w
                                   val envelope = sin(t * PI).toFloat()
-                                  val y = cy +
-                                      sin(t * 9f + phase * speed + idx * 1.8f) * maxAmp * envelope +
-                                      cos(t * 17f - phase * (speed * 1.3f)) * (maxAmp * 0.35f) * envelope
+                                  val bIdx = ((t * (bandCount - 1)).toInt()).coerceIn(0, bandCount - 1)
+                                  val localSpec = bands[bIdx]
+                                  val carrier = sin(t * (7f + idx * 3f) + phase * (2.6f + idx * 0.9f) + idx * 1.9f)
+                                  val amp = maxAmp * (0.04f + localSpec * 0.65f + layerEnergy * 0.35f + beat * 0.18f)
+                                  val y = cy + carrier * amp * envelope
                                   if (s == 0) path.moveTo(x, y) else path.lineTo(x, y)
                               }
-                              drawPath(path, color = color.copy(alpha = 0.24f), style = Stroke(width = 16f, cap = StrokeCap.Round))
-                              drawPath(path, color = color.copy(alpha = 0.95f), style = Stroke(width = 4.5f, cap = StrokeCap.Round))
+                              drawPath(
+                                  path,
+                                  color = color.copy(alpha = (0.16f + layerEnergy * 0.22f).coerceIn(0f, 0.5f)),
+                                  style = Stroke(width = 16f + beat * 6f, cap = StrokeCap.Round)
+                              )
+                              drawPath(
+                                  path,
+                                  color = color.copy(alpha = 0.95f),
+                                  style = Stroke(width = 4.2f, cap = StrokeCap.Round)
+                              )
                           }
                       }
 
+                      // 2: الهالة الكونية 360° — أشعة دائرية متماثلة تقرأ الطيف الحقيقي
                       2 -> {
-                          val baseR = (minDim * 0.22f).coerceAtLeast(24f)
-                          val maxRay = (minDim * 0.21f).coerceAtLeast(14f)
+                          val baseR = (minDim * (0.21f + bass * 0.03f)).coerceAtLeast(24f)
+                          val maxRay = (minDim * 0.24f).coerceAtLeast(16f)
                           val rays = 54
+                          val halfRays = rays / 2
 
                           for (i in 0 until rays) {
-                              val angleRad = (i.toFloat() / rays) * (2f * PI.toFloat()) + phase * 0.35f
-                              val v1 = sin(phase * 5.4f + i * 0.60f) * 0.5f + 0.5f
-                              val v2 = cos(phase * 8.1f - i * 1.05f) * 0.5f + 0.5f
-                              val rayLen = maxRay * (0.12f + 0.88f * (0.55f * v1 + 0.45f * v2) * amplitude)
+                              val mirrored = if (i < halfRays) i else (rays - 1 - i)
+                              val bIdx = ((mirrored.toFloat() / halfRays) * (bandCount - 1)).toInt().coerceIn(0, bandCount - 1)
+                              val level = bands[bIdx]
+                              val angleRad = (i.toFloat() / rays) * (2f * PI.toFloat()) + phase * 0.18f
+                              val rayLen = maxRay * (0.05f + 0.95f * level + beat * 0.10f)
 
                               val start = Offset(cx + cos(angleRad) * baseR, cy + sin(angleRad) * baseR)
                               val end = Offset(cx + cos(angleRad) * (baseR + rayLen), cy + sin(angleRad) * (baseR + rayLen))
@@ -3841,7 +4344,7 @@ jobs:
                               drawLine(color = rayColor, start = start, end = end, strokeWidth = 5f, cap = StrokeCap.Round)
                           }
 
-                          val innerPulse = baseR * (0.86f + 0.07f * sin(phase * 6f) * amplitude)
+                          val innerPulse = baseR * (0.85f + bass * 0.11f + beat * 0.09f)
                           drawCircle(
                               brush = Brush.radialGradient(
                                   colors = listOf(AuraPalette.Violet, Color(0xFF121226)),
@@ -3851,18 +4354,24 @@ jobs:
                               radius = innerPulse,
                               center = Offset(cx, cy)
                           )
-                          drawCircle(color = AuraPalette.Cyan, radius = innerPulse, center = Offset(cx, cy), style = Stroke(2.5f))
+                          drawCircle(
+                              color = AuraPalette.Cyan.copy(alpha = (0.55f + beat * 0.45f).coerceIn(0f, 1f)),
+                              radius = innerPulse,
+                              center = Offset(cx, cy),
+                              style = Stroke(2.5f + beat * 2f)
+                          )
                       }
 
+                      // 3: نبض النجوم — جزيئات تتوهج مع الإيقاع + أعمدة متناظرة حقيقية في الوسط
                       3 -> {
                           val particleCount = 28
                           for (p in 0 until particleCount) {
-                              val speed = 0.14f + (p % 5) * 0.05f
+                              val speed = 0.10f + (p % 5) * 0.04f
                               val life = ((phase * speed + p * 0.137f) % 1f)
-                              val px = ((p * 0.371f + sin(phase * 0.7f + p) * 0.05f) % 1f).let { if (it < 0f) it + 1f else it } * w
+                              val px = ((p * 0.371f + sin(phase * 0.5f + p) * 0.04f) % 1f).let { if (it < 0f) it + 1f else it } * w
                               val py = h * (1f - life)
-                              val alpha = (sin(life * PI).toFloat() * (0.35f + 0.65f * amplitude)).coerceIn(0f, 1f)
-                              val radius = (3f + (p % 4) * 2.2f) * (0.7f + 0.4f * amplitude)
+                              val alpha = (sin(life * PI).toFloat() * (0.20f + overall * 0.60f + beat * 0.35f)).coerceIn(0f, 1f)
+                              val radius = (2.8f + (p % 4) * 2.0f) * (0.75f + high * 0.45f + beat * 0.35f)
                               val col = when (p % 3) {
                                   0 -> AuraPalette.Cyan
                                   1 -> AuraPalette.Violet
@@ -3872,12 +4381,11 @@ jobs:
                               drawCircle(col.copy(alpha = alpha), radius = radius, center = Offset(px, py))
                           }
 
-                          val bars = 32
-                          val margin = w * 0.08f
+                          val margin = w * 0.07f
                           val usableW = (w - margin * 2f).coerceAtLeast(10f)
-                          val step = usableW / bars
-                          val barW = (step * 0.56f).coerceAtLeast(2f)
-                          val maxHalf = h * 0.24f
+                          val step = usableW / bandCount
+                          val barW = (step * 0.58f).coerceAtLeast(2f)
+                          val maxHalf = h * 0.27f
 
                           val mirrorBrush = Brush.verticalGradient(
                               colors = listOf(AuraPalette.Cyan, AuraPalette.Violet, AuraPalette.Rose, AuraPalette.Violet, AuraPalette.Cyan),
@@ -3885,12 +4393,9 @@ jobs:
                               endY = cy + maxHalf
                           )
 
-                          for (i in 0 until bars) {
-                              val norm = i.toFloat() / (bars - 1)
-                              val env = sin(norm * PI).toFloat()
-                              val e1 = sin(phase * 5.2f + i * 0.55f) * 0.5f + 0.5f
-                              val e2 = cos(phase * 8.4f - i * 0.90f) * 0.5f + 0.5f
-                              val halfH = (maxHalf * env * (0.12f + 0.88f * (0.55f * e1 + 0.45f * e2) * amplitude)).coerceAtLeast(5f)
+                          for (i in 0 until bandCount) {
+                              val level = bands[i].coerceIn(0f, 1f)
+                              val halfH = (maxHalf * (0.03f + 0.97f * level)).coerceAtLeast(3.5f)
                               val x = margin + i * step + (step - barW) / 2f
                               drawRoundRect(
                                   brush = mirrorBrush,
@@ -3901,16 +4406,18 @@ jobs:
                           }
                       }
 
+                      // 4: السكينة الإسلامية — تنفّس هادئ مرتبط بنبرة صوت القارئ الفعلية
                       else -> {
                           val center = Offset(cx, h * 0.46f)
-                          val breathe = 1f + 0.045f * sin(phase * 1.8f) * amplitude
+                          val voiceEnergy = (mid * 0.65f + overall * 0.35f).coerceIn(0f, 1f)
+                          val breathe = 1f + voiceEnergy * 0.09f
 
                           val haloR = (minDim * 0.46f * breathe).coerceAtLeast(30f)
                           drawCircle(
                               brush = Brush.radialGradient(
                                   colors = listOf(
-                                      AuraPalette.Gold.copy(alpha = 0.24f + 0.12f * amplitude),
-                                      AuraPalette.EmeraldGlow.copy(alpha = 0.12f),
+                                      AuraPalette.Gold.copy(alpha = 0.18f + 0.24f * voiceEnergy),
+                                      AuraPalette.EmeraldGlow.copy(alpha = 0.10f + 0.08f * voiceEnergy),
                                       Color.Transparent
                                   ),
                                   center = center,
@@ -3941,21 +4448,21 @@ jobs:
                           }
                           drawPath(
                               path = archPath,
-                              color = AuraPalette.Gold.copy(alpha = 0.16f),
+                              color = AuraPalette.Gold.copy(alpha = 0.14f + 0.12f * voiceEnergy),
                               style = Stroke(width = 8f, cap = StrokeCap.Round)
                           )
                           drawPath(
                               path = archPath,
-                              color = AuraPalette.GoldLight.copy(alpha = 0.34f),
+                              color = AuraPalette.GoldLight.copy(alpha = 0.30f + 0.25f * voiceEnergy),
                               style = Stroke(width = 2f, cap = StrokeCap.Round)
                           )
 
                           for (p in 0 until 22) {
-                              val speed = 0.055f + (p % 4) * 0.018f
+                              val speed = 0.042f + (p % 4) * 0.015f
                               val life = ((phase * speed + p * 0.173f) % 1f)
-                              val px = ((p * 0.419f + sin(phase * 0.35f + p) * 0.03f) % 1f).let { if (it < 0f) it + 1f else it } * w
+                              val px = ((p * 0.419f + sin(phase * 0.30f + p) * 0.03f) % 1f).let { if (it < 0f) it + 1f else it } * w
                               val py = h * (0.95f - life * 0.88f)
-                              val alpha = (sin(life * PI).toFloat() * (0.25f + 0.45f * amplitude)).coerceIn(0f, 1f)
+                              val alpha = (sin(life * PI).toFloat() * (0.18f + 0.55f * voiceEnergy)).coerceIn(0f, 1f)
                               val r = 2.2f + (p % 3) * 1.4f
                               drawCircle(AuraPalette.Gold.copy(alpha = alpha * 0.35f), radius = r * 2.6f, center = Offset(px, py))
                               drawCircle(AuraPalette.GoldLight.copy(alpha = alpha), radius = r, center = Offset(px, py))
@@ -3963,42 +4470,42 @@ jobs:
 
                           val outerR = (minDim * 0.31f * breathe).coerceAtLeast(28f)
                           drawCircle(
-                              color = AuraPalette.Gold.copy(alpha = 0.28f),
+                              color = AuraPalette.Gold.copy(alpha = 0.24f + 0.20f * voiceEnergy),
                               radius = outerR,
                               center = center,
                               style = Stroke(width = 2f)
                           )
                           drawCircle(
-                              color = AuraPalette.GoldLight.copy(alpha = 0.16f),
+                              color = AuraPalette.GoldLight.copy(alpha = 0.14f + 0.14f * voiceEnergy),
                               radius = outerR * 1.07f,
                               center = center,
                               style = Stroke(width = 1.2f)
                           )
 
-                          val slowAngle = (phase * 5.5f) % 360f
+                          val slowAngle = (phase * 4.2f) % 360f
                           val dotCount = 16
                           for (i in 0 until dotCount) {
                               val rad = ((i * (360f / dotCount) + slowAngle) * PI / 180.0).toFloat()
                               val dotPos = Offset(center.x + cos(rad) * outerR * 1.035f, center.y + sin(rad) * outerR * 1.035f)
-                              drawCircle(AuraPalette.GoldLight.copy(alpha = 0.65f), radius = 2.6f, center = dotPos)
+                              drawCircle(AuraPalette.GoldLight.copy(alpha = 0.45f + 0.45f * voiceEnergy), radius = 2.6f, center = dotPos)
                           }
 
                           val sOuter = outerR * 0.68f
                           for (rot in listOf(slowAngle, slowAngle + 45f)) {
                               rotate(degrees = rot, pivot = center) {
                                   drawRect(
-                                      color = AuraPalette.Gold.copy(alpha = 0.08f),
+                                      color = AuraPalette.Gold.copy(alpha = 0.06f + 0.08f * voiceEnergy),
                                       topLeft = Offset(center.x - sOuter, center.y - sOuter),
                                       size = Size(sOuter * 2f, sOuter * 2f)
                                   )
                                   drawRect(
-                                      color = AuraPalette.Gold.copy(alpha = 0.30f),
+                                      color = AuraPalette.Gold.copy(alpha = 0.25f + 0.20f * voiceEnergy),
                                       topLeft = Offset(center.x - sOuter, center.y - sOuter),
                                       size = Size(sOuter * 2f, sOuter * 2f),
                                       style = Stroke(width = 6f)
                                   )
                                   drawRect(
-                                      color = AuraPalette.GoldLight.copy(alpha = 0.85f),
+                                      color = AuraPalette.GoldLight.copy(alpha = 0.72f + 0.25f * voiceEnergy),
                                       topLeft = Offset(center.x - sOuter, center.y - sOuter),
                                       size = Size(sOuter * 2f, sOuter * 2f),
                                       style = Stroke(width = 2.2f)
@@ -4007,16 +4514,16 @@ jobs:
                           }
 
                           val sInner = outerR * 0.43f
-                          val reverseAngle = (-phase * 3.8f) % 360f
+                          val reverseAngle = (-phase * 3.0f) % 360f
                           for (rot in listOf(reverseAngle, reverseAngle + 45f)) {
                               rotate(degrees = rot, pivot = center) {
                                   drawRect(
-                                      color = AuraPalette.EmeraldGlow.copy(alpha = 0.14f),
+                                      color = AuraPalette.EmeraldGlow.copy(alpha = 0.12f + 0.10f * voiceEnergy),
                                       topLeft = Offset(center.x - sInner, center.y - sInner),
                                       size = Size(sInner * 2f, sInner * 2f)
                                   )
                                   drawRect(
-                                      color = AuraPalette.Gold.copy(alpha = 0.72f),
+                                      color = AuraPalette.Gold.copy(alpha = 0.60f + 0.30f * voiceEnergy),
                                       topLeft = Offset(center.x - sInner, center.y - sInner),
                                       size = Size(sInner * 2f, sInner * 2f),
                                       style = Stroke(width = 1.8f)
@@ -4024,7 +4531,7 @@ jobs:
                               }
                           }
 
-                          val coreR = (outerR * 0.24f).coerceAtLeast(10f)
+                          val coreR = (outerR * (0.22f + voiceEnergy * 0.05f)).coerceAtLeast(10f)
                           drawCircle(
                               brush = Brush.radialGradient(
                                   colors = listOf(AuraPalette.GoldLight, AuraPalette.Gold, Color(0xFF0A4A3B)),
@@ -4035,28 +4542,32 @@ jobs:
                               center = center
                           )
                           drawCircle(
-                              color = AuraPalette.GoldLight.copy(alpha = 0.9f),
+                              color = AuraPalette.GoldLight.copy(alpha = 0.85f),
                               radius = coreR * 0.45f,
                               center = center,
                               style = Stroke(width = 1.5f)
                           )
 
+                          // موجتان حريريتان تتجاوبان بهدوء مع ترددات الصوت الحقيقية للقارئ
                           val baseWaveY = h * 0.88f
                           for (layer in 0..1) {
                               val path = Path()
                               val steps = 56
-                              val waveAmp = h * (if (layer == 0) 0.032f else 0.022f) * (0.25f + 0.75f * amplitude)
-                              val spd = if (layer == 0) 1.3f else 1.8f
+                              val maxAmp = h * (if (layer == 0) 0.055f else 0.038f)
+                              val spd = if (layer == 0) 1.2f else 1.7f
                               for (s in 0..steps) {
                                   val t = s.toFloat() / steps
                                   val x = t * w
                                   val env = sin(t * PI).toFloat()
-                                  val y = baseWaveY + sin(t * 7f + phase * spd + layer * 2.1f) * waveAmp * env
+                                  val vocalBin = (4 + (t * 18f).toInt()).coerceIn(0, bandCount - 1)
+                                  val vocalAmp = (0.08f + bands[vocalBin] * 0.92f)
+                                  val y = baseWaveY + sin(t * 7f + phase * spd + layer * 2.1f) * maxAmp * vocalAmp * env
                                   if (s == 0) path.moveTo(x, y) else path.lineTo(x, y)
                               }
                               drawPath(
                                   path = path,
-                                  color = if (layer == 0) AuraPalette.Gold.copy(alpha = 0.45f) else AuraPalette.EmeraldGlow.copy(alpha = 0.35f),
+                                  color = if (layer == 0) AuraPalette.Gold.copy(alpha = 0.35f + 0.35f * voiceEnergy)
+                                  else AuraPalette.EmeraldGlow.copy(alpha = 0.25f + 0.30f * voiceEnergy),
                                   style = Stroke(width = if (layer == 0) 3f else 2f, cap = StrokeCap.Round)
                               )
                           }
@@ -4076,14 +4587,14 @@ jobs:
                   val w = size.width
                   val h = size.height
                   if (w <= 1f || h <= 1f) return@Canvas
-                  val phase = clock.phase
-                  val amplitude = clock.amplitude
+                  @Suppress("UNUSED_VARIABLE")
+                  val tick = clock.frameTick
+                  val levels = floatArrayOf(clock.bass, clock.mid, clock.high, clock.overall)
                   val bars = 4
                   val step = w / bars
                   val barW = step * 0.58f
                   for (i in 0 until bars) {
-                      val wave = sin(phase * 7.8f + i * 1.9f) * 0.5f + 0.5f
-                      val barH = h * (0.20f + 0.80f * wave * amplitude)
+                      val barH = h * (0.14f + 0.86f * levels[i].coerceIn(0f, 1f))
                       val x = i * step + (step - barW) / 2f
                       drawRoundRect(
                           color = if (i % 2 == 0) tintPrimary else tintSecondary,
