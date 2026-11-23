@@ -63,8 +63,8 @@ jobs:
                   applicationId = "com.pulse.player"
                   minSdk = 26
                   targetSdk = 35
-                  versionCode = 4
-                  versionName = "1.3-MultiLang"
+                  versionCode = 5
+                  versionName = "1.4-Visuals"
               }
 
               buildTypes {
@@ -159,6 +159,12 @@ jobs:
               <string name="cd_next">Next</string>
               <string name="cd_shuffle">Shuffle</string>
               <string name="cd_repeat">Repeat</string>
+              <string name="cd_fullscreen">Full-screen visualizer</string>
+              <string name="cd_exit_fullscreen">Exit full-screen</string>
+              <string name="cd_change_style">Change visual style</string>
+              <string name="style_neon_bars">Neon Spectrum</string>
+              <string name="style_aurora_waves">Aurora Waves</string>
+              <string name="style_radial_pulse">Radial Pulse</string>
           </resources>
           EOF
 
@@ -217,6 +223,12 @@ jobs:
               <string name="cd_next">التالي</string>
               <string name="cd_shuffle">عشوائي</string>
               <string name="cd_repeat">تكرار</string>
+              <string name="cd_fullscreen">وضع العرض الكامل</string>
+              <string name="cd_exit_fullscreen">الخروج من العرض الكامل</string>
+              <string name="cd_change_style">تغيير نمط الحركة</string>
+              <string name="style_neon_bars">طيف النيون</string>
+              <string name="style_aurora_waves">أمواج الشفق</string>
+              <string name="style_radial_pulse">النبض الدائري</string>
           </resources>
           EOF
 
@@ -627,16 +639,22 @@ jobs:
           import android.os.Build
           import android.os.Bundle
           import android.provider.MediaStore
+          import android.view.WindowManager
           import android.widget.Toast
           import androidx.activity.ComponentActivity
+          import androidx.activity.SystemBarStyle
           import androidx.activity.compose.BackHandler
           import androidx.activity.compose.rememberLauncherForActivityResult
           import androidx.activity.compose.setContent
+          import androidx.activity.enableEdgeToEdge
           import androidx.activity.result.IntentSenderRequest
           import androidx.activity.result.contract.ActivityResultContracts
           import androidx.compose.foundation.BorderStroke
+          import androidx.compose.foundation.Canvas
           import androidx.compose.foundation.background
+          import androidx.compose.foundation.basicMarquee
           import androidx.compose.foundation.border
+          import androidx.compose.foundation.clickable
           import androidx.compose.foundation.layout.*
           import androidx.compose.foundation.lazy.LazyColumn
           import androidx.compose.foundation.lazy.items
@@ -652,7 +670,15 @@ jobs:
           import androidx.compose.ui.Modifier
           import androidx.compose.ui.draw.clip
           import androidx.compose.ui.focus.onFocusChanged
+          import androidx.compose.ui.geometry.CornerRadius
+          import androidx.compose.ui.geometry.Offset
+          import androidx.compose.ui.geometry.Size
+          import androidx.compose.ui.graphics.Brush
           import androidx.compose.ui.graphics.Color
+          import androidx.compose.ui.graphics.Path
+          import androidx.compose.ui.graphics.StrokeCap
+          import androidx.compose.ui.graphics.drawscope.Stroke
+          import androidx.compose.ui.graphics.drawscope.rotate
           import androidx.compose.ui.graphics.vector.ImageVector
           import androidx.compose.ui.platform.LocalConfiguration
           import androidx.compose.ui.platform.LocalContext
@@ -676,6 +702,10 @@ jobs:
           import kotlinx.coroutines.launch
           import java.io.File
           import java.util.Locale
+          import kotlin.math.PI
+          import kotlin.math.abs
+          import kotlin.math.cos
+          import kotlin.math.sin
 
           class MainActivity : ComponentActivity() {
               private var controllerFuture: ListenableFuture<MediaController>? = null
@@ -699,6 +729,10 @@ jobs:
 
               override fun onCreate(savedInstanceState: Bundle?) {
                   super.onCreate(savedInstanceState)
+                  enableEdgeToEdge(
+                      statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
+                      navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT)
+                  )
                   setContent {
                       MaterialTheme(
                           colorScheme = darkColorScheme(
@@ -722,6 +756,7 @@ jobs:
           @Composable
           fun PulseApp(player: Player?) {
               val context = LocalContext.current
+              val activity = context as? Activity
               val config = LocalConfiguration.current
               val isTv = (config.uiMode and Configuration.UI_MODE_TYPE_MASK) == Configuration.UI_MODE_TYPE_TELEVISION
               val isWideScreen = isTv || config.screenWidthDp >= 640
@@ -735,6 +770,9 @@ jobs:
 
               var selectedLocalFolder by remember { mutableStateOf<String?>(null) }
               var selectedRemoteFolder by remember { mutableStateOf<String?>(null) }
+
+              var isFullScreen by remember { mutableStateOf(false) }
+              var visualizerStyle by remember { mutableIntStateOf(prefs.getInt("vis_style", 0)) }
 
               var hiddenSongIds by remember {
                   mutableStateOf(prefs.getStringSet("hidden_songs", emptySet())?.toSet() ?: emptySet())
@@ -763,6 +801,44 @@ jobs:
               var durationMs by remember { mutableLongStateOf(0L) }
               var shuffleEnabled by remember { mutableStateOf(false) }
               var repeatMode by remember { mutableIntStateOf(Player.REPEAT_MODE_ALL) }
+
+              // محرك حركة 60fps للأنيميشن يعمل فقط أثناء التشغيل ويتوقف بهدوء عند الإيقاف
+              var animPhase by remember { mutableFloatStateOf(0f) }
+              var activeAmplitude by remember { mutableFloatStateOf(0f) }
+
+              LaunchedEffect(isPlaying) {
+                  var lastNanos = 0L
+                  while (true) {
+                      withFrameNanos { now ->
+                          if (lastNanos != 0L) {
+                              val dt = ((now - lastNanos) / 1_000_000_000f).coerceIn(0f, 0.05f)
+                              if (isPlaying) {
+                                  animPhase += dt
+                                  activeAmplitude = (activeAmplitude + dt * 3.5f).coerceAtMost(1f)
+                              } else {
+                                  activeAmplitude = (activeAmplitude - dt * 2.5f).coerceAtLeast(0f)
+                              }
+                          }
+                          lastNanos = now
+                      }
+                      if (!isPlaying && activeAmplitude <= 0.001f) break
+                  }
+              }
+
+              // إبقاء الشاشة مضاءة أثناء وضع العرض الكامل على الهاتف أو التلفاز
+              DisposableEffect(isFullScreen) {
+                  if (isFullScreen) {
+                      activity?.window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                  }
+                  onDispose {
+                      activity?.window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                  }
+              }
+
+              fun cycleVisualizerStyle() {
+                  visualizerStyle = (visualizerStyle + 1) % 3
+                  prefs.edit().putInt("vis_style", visualizerStyle).apply()
+              }
 
               fun saveHiddenSets(songs: Set<String>, folders: Set<String>) {
                   hiddenSongIds = songs
@@ -849,9 +925,14 @@ jobs:
               }
 
               val currentOpenFolder = if (selectedTab == 0) selectedLocalFolder else selectedRemoteFolder
-              BackHandler(enabled = currentOpenFolder != null) {
+
+              BackHandler(enabled = !isFullScreen && currentOpenFolder != null) {
                   if (selectedTab == 0) selectedLocalFolder = null else selectedRemoteFolder = null
                   searchQuery = ""
+              }
+
+              BackHandler(enabled = isFullScreen) {
+                  isFullScreen = false
               }
 
               val audioPermission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -981,6 +1062,33 @@ jobs:
                   Unit
               }
 
+              if (isFullScreen) {
+                  FullScreenVisualizer(
+                      title = currentTitle,
+                      artist = currentArtist,
+                      isPlaying = isPlaying,
+                      isTv = isTv,
+                      positionMs = positionMs,
+                      durationMs = durationMs,
+                      shuffleEnabled = shuffleEnabled,
+                      repeatMode = repeatMode,
+                      style = visualizerStyle,
+                      phase = animPhase,
+                      amplitude = activeAmplitude,
+                      onSeek = { player?.seekTo(it) },
+                      onPlayPause = onPlayPause,
+                      onNext = onNext,
+                      onPrev = onPrev,
+                      onRewind = onRewind,
+                      onForward = onForward,
+                      onToggleShuffle = onToggleShuffle,
+                      onToggleRepeat = onToggleRepeat,
+                      onCycleStyle = { cycleVisualizerStyle() },
+                      onExit = { isFullScreen = false }
+                  )
+                  return
+              }
+
               Scaffold(
                   topBar = {
                       TopAppBar(
@@ -998,6 +1106,13 @@ jobs:
                               containerColor = MaterialTheme.colorScheme.surface
                           ),
                           actions = {
+                              TvIconButton(
+                                  icon = Icons.Default.GraphicEq,
+                                  contentDescription = stringResource(R.string.cd_fullscreen),
+                                  onClick = { isFullScreen = true },
+                                  tint = if (isPlaying) Color(0xFF00E5FF) else MaterialTheme.colorScheme.secondary
+                              )
+                              Spacer(Modifier.width(4.dp))
                               TvIconButton(
                                   icon = Icons.Default.Refresh,
                                   contentDescription = stringResource(R.string.refresh),
@@ -1019,6 +1134,8 @@ jobs:
                               title = currentTitle,
                               artist = currentArtist,
                               isPlaying = isPlaying,
+                              phase = animPhase,
+                              amplitude = activeAmplitude,
                               positionMs = positionMs,
                               durationMs = durationMs,
                               shuffleEnabled = shuffleEnabled,
@@ -1028,7 +1145,8 @@ jobs:
                               onNext = onNext,
                               onPrev = onPrev,
                               onToggleShuffle = onToggleShuffle,
-                              onToggleRepeat = onToggleRepeat
+                              onToggleRepeat = onToggleRepeat,
+                              onExpand = { isFullScreen = true }
                           )
                       }
                   }
@@ -1182,6 +1300,9 @@ jobs:
                                               SongRowItem(
                                                   song = song,
                                                   isCurrent = song.id == currentMediaId,
+                                                  isPlaying = isPlaying,
+                                                  phase = animPhase,
+                                                  amplitude = activeAmplitude,
                                                   showFolderBadge = true,
                                                   onClick = { playListFromIndex(matchedSongs, index) },
                                                   onManageClick = if (!song.isRemote) { { songToManage = song } } else null
@@ -1261,6 +1382,9 @@ jobs:
                                           SongRowItem(
                                               song = song,
                                               isCurrent = song.id == currentMediaId,
+                                              isPlaying = isPlaying,
+                                              phase = animPhase,
+                                              amplitude = activeAmplitude,
                                               showFolderBadge = false,
                                               onClick = { playListFromIndex(folderSongs, index) },
                                               onManageClick = if (!song.isRemote) { { songToManage = song } } else null
@@ -1280,7 +1404,7 @@ jobs:
                               .padding(horizontal = 16.dp, vertical = 10.dp),
                           horizontalArrangement = Arrangement.spacedBy(16.dp)
                       ) {
-                          libraryContent(Modifier.weight(1.35f).fillMaxHeight())
+                          libraryContent(Modifier.weight(1.3f).fillMaxHeight())
                           TvNowPlayingPanel(
                               title = currentTitle,
                               artist = currentArtist,
@@ -1289,6 +1413,9 @@ jobs:
                               durationMs = durationMs,
                               shuffleEnabled = shuffleEnabled,
                               repeatMode = repeatMode,
+                              style = visualizerStyle,
+                              phase = animPhase,
+                              amplitude = activeAmplitude,
                               onPlayPause = onPlayPause,
                               onNext = onNext,
                               onPrev = onPrev,
@@ -1296,7 +1423,9 @@ jobs:
                               onForward = onForward,
                               onToggleShuffle = onToggleShuffle,
                               onToggleRepeat = onToggleRepeat,
-                              modifier = Modifier.weight(0.95f).fillMaxHeight()
+                              onCycleStyle = { cycleVisualizerStyle() },
+                              onFullScreen = { isFullScreen = true },
+                              modifier = Modifier.weight(1.0f).fillMaxHeight()
                           )
                       }
                   } else {
@@ -1419,6 +1548,455 @@ jobs:
           }
 
           @Composable
+          fun VisualizerStage(
+              style: Int,
+              phase: Float,
+              amplitude: Float,
+              modifier: Modifier = Modifier
+          ) {
+              Canvas(modifier = modifier) {
+                  val w = size.width
+                  val h = size.height
+                  if (w <= 2f || h <= 2f) return@Canvas
+
+                  val cx = w / 2f
+                  val cy = h / 2f
+                  val minDim = minOf(w, h)
+
+                  // خلفية متوهجة متحركة (Ambient Orbs)
+                  val orb1X = cx + cos(phase * 0.55f) * w * 0.24f
+                  val orb1Y = cy + sin(phase * 0.42f) * h * 0.20f
+                  val orb2X = cx + cos(phase * 0.38f + 2.4f) * w * 0.26f
+                  val orb2Y = cy + sin(phase * 0.61f + 1.2f) * h * 0.22f
+                  val orbR = (minDim * (0.48f + 0.08f * sin(phase * 1.4f) * amplitude)).coerceAtLeast(10f)
+
+                  drawCircle(
+                      brush = Brush.radialGradient(
+                          colors = listOf(Color(0x557C4DFF), Color.Transparent),
+                          center = Offset(orb1X, orb1Y),
+                          radius = orbR
+                      ),
+                      radius = orbR,
+                      center = Offset(orb1X, orb1Y)
+                  )
+                  drawCircle(
+                      brush = Brush.radialGradient(
+                          colors = listOf(Color(0x4400E5FF), Color.Transparent),
+                          center = Offset(orb2X, orb2Y),
+                          radius = orbR * 0.9f
+                      ),
+                      radius = orbR * 0.9f,
+                      center = Offset(orb2X, orb2Y)
+                  )
+
+                  when (style) {
+                      // 0: أسطوانة دوّارة + أعمدة طيف نيون
+                      0 -> {
+                          val discCenter = Offset(cx, h * 0.38f)
+                          val discRadius = (minDim * 0.24f).coerceAtLeast(24f)
+                          val pulse = (1f + 0.08f * sin(phase * 5.2f) * amplitude)
+
+                          // حلقات نبض متوسعة
+                          for (ring in 0..2) {
+                              val ringProg = ((phase * 0.55f + ring * 0.33f) % 1f)
+                              val r = discRadius * (1.05f + ringProg * 0.85f)
+                              val alpha = ((1f - ringProg) * 0.42f * amplitude).coerceIn(0f, 1f)
+                              if (alpha > 0.01f) {
+                                  drawCircle(
+                                      color = if (ring % 2 == 0) Color(0xFFBB86FC).copy(alpha = alpha)
+                                      else Color(0xFF00E5FF).copy(alpha = alpha),
+                                      radius = r,
+                                      center = discCenter,
+                                      style = Stroke(width = 3f)
+                                  )
+                              }
+                          }
+
+                          // الأسطوانة الدوارة
+                          rotate(degrees = (phase * 42f) % 360f, pivot = discCenter) {
+                              drawCircle(
+                                  brush = Brush.radialGradient(
+                                      colors = listOf(Color(0xFF2F2654), Color(0xFF141422), Color(0xFF090910)),
+                                      center = discCenter,
+                                      radius = discRadius * pulse
+                                  ),
+                                  radius = discRadius * pulse,
+                                  center = discCenter
+                              )
+                              // خطوط الأسطوانة
+                              drawCircle(
+                                  color = Color(0x33FFFFFF),
+                                  radius = discRadius * 0.78f * pulse,
+                                  center = discCenter,
+                                  style = Stroke(width = 1.8f)
+                              )
+                              drawCircle(
+                                  color = Color(0x28BB86FC),
+                                  radius = discRadius * 0.58f * pulse,
+                                  center = discCenter,
+                                  style = Stroke(width = 1.5f)
+                              )
+                              // نقطة لمعان تتحرك مع الدوران
+                              drawArc(
+                                  color = Color(0x6600E5FF),
+                                  startAngle = -35f,
+                                  sweepAngle = 70f,
+                                  useCenter = false,
+                                  topLeft = Offset(
+                                      discCenter.x - discRadius * 0.86f * pulse,
+                                      discCenter.y - discRadius * 0.86f * pulse
+                                  ),
+                                  size = Size(discRadius * 1.72f * pulse, discRadius * 1.72f * pulse),
+                                  style = Stroke(width = 4f, cap = StrokeCap.Round)
+                              )
+                              // مركز الأسطوانة
+                              drawCircle(
+                                  brush = Brush.linearGradient(listOf(Color(0xFF7C4DFF), Color(0xFF00E5FF))),
+                                  radius = discRadius * 0.30f,
+                                  center = discCenter
+                              )
+                              drawCircle(
+                                  color = Color(0xFF0E0E14),
+                                  radius = discRadius * 0.09f,
+                                  center = discCenter
+                              )
+                          }
+
+                          // أعمدة الطيف الصوتي في الأسفل
+                          val barCount = 32
+                          val horizontalMargin = w * 0.06f
+                          val usableW = (w - horizontalMargin * 2f).coerceAtLeast(10f)
+                          val step = usableW / barCount
+                          val barW = (step * 0.62f).coerceAtLeast(2f)
+                          val maxBarH = (h * 0.30f).coerceAtLeast(16f)
+                          val baselineY = h * 0.94f
+
+                          val barBrush = Brush.verticalGradient(
+                              colors = listOf(Color(0xFF00E5FF), Color(0xFFBB86FC), Color(0xFF7C4DFF)),
+                              startY = baselineY - maxBarH,
+                              endY = baselineY
+                          )
+
+                          for (i in 0 until barCount) {
+                              val norm = i.toFloat() / (barCount - 1)
+                              val centerBoost = 1f - abs(norm - 0.5f) * 0.85f
+                              val wave1 = sin(phase * 4.8f + i * 0.45f) * 0.5f + 0.5f
+                              val wave2 = cos(phase * 7.6f - i * 0.82f) * 0.5f + 0.5f
+                              val wave3 = sin(phase * 2.9f + i * 1.25f) * 0.5f + 0.5f
+                              val energy = (0.45f * wave1 + 0.35f * wave2 + 0.20f * wave3) * centerBoost
+                              val barH = (maxBarH * (0.08f + 0.92f * energy * amplitude)).coerceAtLeast(6f)
+                              val x = horizontalMargin + i * step + (step - barW) / 2f
+
+                              drawRoundRect(
+                                  brush = barBrush,
+                                  topLeft = Offset(x, baselineY - barH),
+                                  size = Size(barW, barH),
+                                  cornerRadius = CornerRadius(barW / 2f, barW / 2f)
+                              )
+                          }
+                      }
+
+                      // 1: أمواج الشفق (Aurora Waves)
+                      1 -> {
+                          val waveConfigs = listOf(
+                              Triple(Color(0xFF00E5FF), 1.0f, 3.2f),
+                              Triple(Color(0xFFBB86FC), 0.78f, 4.5f),
+                              Triple(Color(0xFFFF4081), 0.60f, 2.4f)
+                          )
+                          waveConfigs.forEachIndexed { idx, (color, ampScale, speed) ->
+                              val path = Path()
+                              val steps = 64
+                              val maxAmp = h * 0.22f * ampScale * (0.15f + 0.85f * amplitude)
+                              for (s in 0..steps) {
+                                  val t = s.toFloat() / steps
+                                  val x = t * w
+                                  val envelope = sin(t * PI).toFloat()
+                                  val y = cy +
+                                      sin(t * 9f + phase * speed + idx * 1.8f) * maxAmp * envelope +
+                                      cos(t * 17f - phase * (speed * 1.3f)) * (maxAmp * 0.35f) * envelope
+                                  if (s == 0) path.moveTo(x, y) else path.lineTo(x, y)
+                              }
+                              drawPath(
+                                  path = path,
+                                  color = color.copy(alpha = 0.25f),
+                                  style = Stroke(width = 14f, cap = StrokeCap.Round)
+                              )
+                              drawPath(
+                                  path = path,
+                                  color = color.copy(alpha = 0.92f),
+                                  style = Stroke(width = 4.5f, cap = StrokeCap.Round)
+                              )
+                          }
+                      }
+
+                      // 2: النبض الدائري (Radial Pulse 360°)
+                      else -> {
+                          val baseR = (minDim * 0.22f).coerceAtLeast(24f)
+                          val maxRay = (minDim * 0.20f).coerceAtLeast(14f)
+                          val rays = 48
+
+                          for (i in 0 until rays) {
+                              val angleRad = (i.toFloat() / rays) * (2f * PI.toFloat()) + phase * 0.35f
+                              val v1 = sin(phase * 5.4f + i * 0.65f) * 0.5f + 0.5f
+                              val v2 = cos(phase * 8.1f - i * 1.1f) * 0.5f + 0.5f
+                              val rayLen = maxRay * (0.12f + 0.88f * (0.55f * v1 + 0.45f * v2) * amplitude)
+
+                              val start = Offset(
+                                  cx + cos(angleRad) * baseR,
+                                  cy + sin(angleRad) * baseR
+                              )
+                              val end = Offset(
+                                  cx + cos(angleRad) * (baseR + rayLen),
+                                  cy + sin(angleRad) * (baseR + rayLen)
+                              )
+                              val rayColor = if (i % 3 == 0) Color(0xFF00E5FF)
+                              else if (i % 3 == 1) Color(0xFFBB86FC)
+                              else Color(0xFFFF4081)
+
+                              drawLine(
+                                  color = rayColor,
+                                  start = start,
+                                  end = end,
+                                  strokeWidth = 5f,
+                                  cap = StrokeCap.Round
+                              )
+                          }
+
+                          val innerPulse = baseR * (0.86f + 0.06f * sin(phase * 6f) * amplitude)
+                          drawCircle(
+                              brush = Brush.radialGradient(
+                                  colors = listOf(Color(0xFF7C4DFF), Color(0xFF171722)),
+                                  center = Offset(cx, cy),
+                                  radius = innerPulse.coerceAtLeast(10f)
+                              ),
+                              radius = innerPulse,
+                              center = Offset(cx, cy)
+                          )
+                          drawCircle(
+                              color = Color(0xFF00E5FF),
+                              radius = innerPulse,
+                              center = Offset(cx, cy),
+                              style = Stroke(width = 2.5f)
+                          )
+                      }
+                  }
+              }
+          }
+
+          @Composable
+          fun MiniEqualizerBars(
+              phase: Float,
+              amplitude: Float,
+              modifier: Modifier = Modifier.size(width = 22.dp, height = 18.dp)
+          ) {
+              Canvas(modifier = modifier) {
+                  val w = size.width
+                  val h = size.height
+                  if (w <= 1f || h <= 1f) return@Canvas
+                  val bars = 3
+                  val step = w / bars
+                  val barW = step * 0.62f
+                  for (i in 0 until bars) {
+                      val wave = sin(phase * 7.5f + i * 2.1f) * 0.5f + 0.5f
+                      val barH = h * (0.22f + 0.78f * wave * amplitude)
+                      val x = i * step + (step - barW) / 2f
+                      drawRoundRect(
+                          color = if (i == 1) Color(0xFF00E5FF) else Color(0xFFBB86FC),
+                          topLeft = Offset(x, h - barH),
+                          size = Size(barW, barH),
+                          cornerRadius = CornerRadius(barW / 2f, barW / 2f)
+                      )
+                  }
+              }
+          }
+
+          @Composable
+          fun FullScreenVisualizer(
+              title: String,
+              artist: String,
+              isPlaying: Boolean,
+              isTv: Boolean,
+              positionMs: Long,
+              durationMs: Long,
+              shuffleEnabled: Boolean,
+              repeatMode: Int,
+              style: Int,
+              phase: Float,
+              amplitude: Float,
+              onSeek: (Long) -> Unit,
+              onPlayPause: () -> Unit,
+              onNext: () -> Unit,
+              onPrev: () -> Unit,
+              onRewind: () -> Unit,
+              onForward: () -> Unit,
+              onToggleShuffle: () -> Unit,
+              onToggleRepeat: () -> Unit,
+              onCycleStyle: () -> Unit,
+              onExit: () -> Unit
+          ) {
+              val styleName = when (style) {
+                  0 -> stringResource(R.string.style_neon_bars)
+                  1 -> stringResource(R.string.style_aurora_waves)
+                  else -> stringResource(R.string.style_radial_pulse)
+              }
+
+              Box(
+                  modifier = Modifier
+                      .fillMaxSize()
+                      .background(
+                          Brush.verticalGradient(
+                              listOf(Color(0xFF0A0A14), Color(0xFF131026), Color(0xFF090910))
+                          )
+                      )
+              ) {
+                  // خلفية الحركة الكاملة
+                  VisualizerStage(
+                      style = style,
+                      phase = phase,
+                      amplitude = amplitude,
+                      modifier = Modifier
+                          .fillMaxSize()
+                          .padding(top = 56.dp, bottom = 190.dp)
+                  )
+
+                  Column(
+                      modifier = Modifier
+                          .fillMaxSize()
+                          .statusBarsPadding()
+                          .navigationBarsPadding()
+                          .padding(horizontal = 20.dp, vertical = 12.dp),
+                      verticalArrangement = Arrangement.SpaceBetween
+                  ) {
+                      // الشريط العلوي (خروج + تبديل نمط الحركة)
+                      Row(
+                          modifier = Modifier.fillMaxWidth(),
+                          horizontalArrangement = Arrangement.SpaceBetween,
+                          verticalAlignment = Alignment.CenterVertically
+                      ) {
+                          TvIconButton(
+                              icon = Icons.Default.FullscreenExit,
+                              contentDescription = stringResource(R.string.cd_exit_fullscreen),
+                              onClick = onExit
+                          )
+
+                          Surface(
+                              onClick = onCycleStyle,
+                              shape = RoundedCornerShape(24.dp),
+                              color = Color(0x441F1C33),
+                              border = BorderStroke(1.dp, Color(0x66BB86FC))
+                          ) {
+                              Row(
+                                  modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                                  verticalAlignment = Alignment.CenterVertically,
+                                  horizontalArrangement = Arrangement.spacedBy(8.dp)
+                              ) {
+                                  Icon(
+                                      Icons.Default.Palette,
+                                      contentDescription = stringResource(R.string.cd_change_style),
+                                      tint = Color(0xFF00E5FF),
+                                      modifier = Modifier.size(18.dp)
+                                  )
+                                  Text(styleName, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+                              }
+                          }
+                      }
+
+                      Spacer(Modifier.weight(1f))
+
+                      // لوحة المعلومات والتحكم السفلية
+                      Column(
+                          modifier = Modifier
+                              .fillMaxWidth()
+                              .clip(RoundedCornerShape(24.dp))
+                              .background(Color(0xAA141422))
+                              .padding(horizontal = 20.dp, vertical = 16.dp),
+                          horizontalAlignment = Alignment.CenterHorizontally
+                      ) {
+                          Text(
+                              title,
+                              fontSize = if (isTv) 26.sp else 20.sp,
+                              fontWeight = FontWeight.Bold,
+                              color = Color.White,
+                              maxLines = 1,
+                              modifier = Modifier.basicMarquee()
+                          )
+                          if (artist.isNotBlank()) {
+                              Spacer(Modifier.height(4.dp))
+                              Text(
+                                  artist,
+                                  fontSize = if (isTv) 16.sp else 13.sp,
+                                  color = Color(0xFFB3B3CC),
+                                  maxLines = 1,
+                                  overflow = TextOverflow.Ellipsis
+                              )
+                          }
+
+                          Spacer(Modifier.height(10.dp))
+
+                          CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                              if (isTv) {
+                                  val progress = if (durationMs > 0L) (positionMs.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f) else 0f
+                                  LinearProgressIndicator(
+                                      progress = { progress },
+                                      modifier = Modifier.fillMaxWidth().height(7.dp).clip(RoundedCornerShape(4.dp))
+                                  )
+                              } else {
+                                  val safeMax = durationMs.coerceAtLeast(1L).toFloat()
+                                  Slider(
+                                      value = positionMs.coerceIn(0L, durationMs.coerceAtLeast(1L)).toFloat(),
+                                      onValueChange = { onSeek(it.toLong()) },
+                                      valueRange = 0f..safeMax,
+                                      modifier = Modifier.fillMaxWidth()
+                                  )
+                              }
+
+                              Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                  Text(formatTime(positionMs), fontSize = 12.sp, color = Color(0xFFB3B3CC))
+                                  Text(formatTime(durationMs), fontSize = 12.sp, color = Color(0xFFB3B3CC))
+                              }
+
+                              Spacer(Modifier.height(8.dp))
+
+                              Row(
+                                  modifier = Modifier.fillMaxWidth(),
+                                  horizontalArrangement = Arrangement.SpaceEvenly,
+                                  verticalAlignment = Alignment.CenterVertically
+                              ) {
+                                  TvIconButton(
+                                      icon = Icons.Default.Shuffle,
+                                      contentDescription = stringResource(R.string.cd_shuffle),
+                                      onClick = onToggleShuffle,
+                                      tint = if (shuffleEnabled) Color(0xFF00E5FF) else Color.Gray
+                                  )
+                                  TvIconButton(Icons.Default.SkipPrevious, stringResource(R.string.cd_previous), onPrev)
+                                  if (isTv) {
+                                      TvIconButton(Icons.Default.FastRewind, stringResource(R.string.cd_rewind), onRewind)
+                                  }
+                                  TvIconButton(
+                                      icon = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                      contentDescription = stringResource(R.string.cd_play_pause),
+                                      onClick = onPlayPause,
+                                      filled = true,
+                                      size = 62
+                                  )
+                                  if (isTv) {
+                                      TvIconButton(Icons.Default.FastForward, stringResource(R.string.cd_forward), onForward)
+                                  }
+                                  TvIconButton(Icons.Default.SkipNext, stringResource(R.string.cd_next), onNext)
+                                  TvIconButton(
+                                      icon = if (repeatMode == Player.REPEAT_MODE_ONE) Icons.Default.RepeatOne else Icons.Default.Repeat,
+                                      contentDescription = stringResource(R.string.cd_repeat),
+                                      onClick = onToggleRepeat,
+                                      tint = if (repeatMode != Player.REPEAT_MODE_OFF) Color(0xFF00E5FF) else Color.Gray
+                                  )
+                              }
+                          }
+                      }
+                  }
+              }
+          }
+
+          @Composable
           fun FolderRowItem(
               folder: FolderGroup,
               isRemote: Boolean,
@@ -1530,6 +2108,9 @@ jobs:
           fun SongRowItem(
               song: SongItem,
               isCurrent: Boolean,
+              isPlaying: Boolean,
+              phase: Float,
+              amplitude: Float,
               showFolderBadge: Boolean,
               onClick: () -> Unit,
               onManageClick: (() -> Unit)?
@@ -1560,11 +2141,15 @@ jobs:
                               .padding(horizontal = 12.dp, vertical = 11.dp),
                           verticalAlignment = Alignment.CenterVertically
                       ) {
-                          Icon(
-                              if (song.isRemote) Icons.Default.Cloud else Icons.Default.MusicNote,
-                              contentDescription = null,
-                              tint = if (isCurrent || isFocused) MaterialTheme.colorScheme.secondary else Color.Gray
-                          )
+                          if (isCurrent && isPlaying) {
+                              MiniEqualizerBars(phase = phase, amplitude = amplitude)
+                          } else {
+                              Icon(
+                                  if (song.isRemote) Icons.Default.Cloud else Icons.Default.MusicNote,
+                                  contentDescription = null,
+                                  tint = if (isCurrent || isFocused) MaterialTheme.colorScheme.secondary else Color.Gray
+                              )
+                          }
                           Spacer(Modifier.width(10.dp))
                           Column(modifier = Modifier.weight(1f)) {
                               Text(
@@ -1612,6 +2197,9 @@ jobs:
               durationMs: Long,
               shuffleEnabled: Boolean,
               repeatMode: Int,
+              style: Int,
+              phase: Float,
+              amplitude: Float,
               onPlayPause: () -> Unit,
               onNext: () -> Unit,
               onPrev: () -> Unit,
@@ -1619,6 +2207,8 @@ jobs:
               onForward: () -> Unit,
               onToggleShuffle: () -> Unit,
               onToggleRepeat: () -> Unit,
+              onCycleStyle: () -> Unit,
+              onFullScreen: () -> Unit,
               modifier: Modifier = Modifier
           ) {
               Surface(
@@ -1627,45 +2217,69 @@ jobs:
                   modifier = modifier
               ) {
                   Column(
-                      modifier = Modifier.fillMaxSize().padding(24.dp),
+                      modifier = Modifier.fillMaxSize().padding(18.dp),
                       horizontalAlignment = Alignment.CenterHorizontally,
                       verticalArrangement = Arrangement.SpaceBetween
                   ) {
                       Box(
                           modifier = Modifier
-                              .size(150.dp)
-                              .clip(RoundedCornerShape(24.dp))
-                              .background(Color(0xFF251E42)),
-                          contentAlignment = Alignment.Center
+                              .fillMaxWidth()
+                              .weight(1f)
+                              .clip(RoundedCornerShape(18.dp))
+                              .background(Color(0xFF0E0E18))
                       ) {
-                          Icon(
-                              Icons.Default.MusicNote,
-                              contentDescription = null,
-                              tint = MaterialTheme.colorScheme.secondary,
-                              modifier = Modifier.size(68.dp)
+                          VisualizerStage(
+                              style = style,
+                              phase = phase,
+                              amplitude = amplitude,
+                              modifier = Modifier.fillMaxSize()
                           )
+                          Row(
+                              modifier = Modifier
+                                  .align(Alignment.TopEnd)
+                                  .padding(8.dp),
+                              horizontalArrangement = Arrangement.spacedBy(4.dp)
+                          ) {
+                              TvIconButton(
+                                  icon = Icons.Default.Palette,
+                                  contentDescription = stringResource(R.string.cd_change_style),
+                                  onClick = onCycleStyle,
+                                  tint = Color(0xFF00E5FF),
+                                  size = 38
+                              )
+                              TvIconButton(
+                                  icon = Icons.Default.Fullscreen,
+                                  contentDescription = stringResource(R.string.cd_fullscreen),
+                                  onClick = onFullScreen,
+                                  tint = Color.White,
+                                  size = 38
+                              )
+                          }
                       }
+
+                      Spacer(Modifier.height(12.dp))
 
                       Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
                           Text(
                               title,
-                              fontSize = 20.sp,
+                              fontSize = 19.sp,
                               fontWeight = FontWeight.Bold,
-                              maxLines = 2,
-                              textAlign = TextAlign.Center,
-                              overflow = TextOverflow.Ellipsis
+                              maxLines = 1,
+                              modifier = Modifier.basicMarquee()
                           )
                           if (artist.isNotBlank()) {
-                              Spacer(Modifier.height(6.dp))
+                              Spacer(Modifier.height(4.dp))
                               Text(
                                   artist,
-                                  fontSize = 14.sp,
+                                  fontSize = 13.sp,
                                   color = Color.Gray,
                                   maxLines = 1,
                                   overflow = TextOverflow.Ellipsis
                               )
                           }
                       }
+
+                      Spacer(Modifier.height(10.dp))
 
                       CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
                           Column(modifier = Modifier.fillMaxWidth()) {
@@ -1681,6 +2295,8 @@ jobs:
                               }
                           }
 
+                          Spacer(Modifier.height(6.dp))
+
                           Row(
                               modifier = Modifier.fillMaxWidth(),
                               horizontalArrangement = Arrangement.SpaceEvenly,
@@ -1693,7 +2309,7 @@ jobs:
                                   contentDescription = stringResource(R.string.cd_play_pause),
                                   onClick = onPlayPause,
                                   filled = true,
-                                  size = 60
+                                  size = 56
                               )
                               TvIconButton(Icons.Default.FastForward, stringResource(R.string.cd_forward), onForward)
                               TvIconButton(Icons.Default.SkipNext, stringResource(R.string.cd_next), onNext)
@@ -1708,13 +2324,13 @@ jobs:
                               icon = Icons.Default.Shuffle,
                               contentDescription = stringResource(R.string.cd_shuffle),
                               onClick = onToggleShuffle,
-                              tint = if (shuffleEnabled) MaterialTheme.colorScheme.secondary else Color.Gray
+                              tint = if (shuffleEnabled) Color(0xFF00E5FF) else Color.Gray
                           )
                           TvIconButton(
                               icon = if (repeatMode == Player.REPEAT_MODE_ONE) Icons.Default.RepeatOne else Icons.Default.Repeat,
                               contentDescription = stringResource(R.string.cd_repeat),
                               onClick = onToggleRepeat,
-                              tint = if (repeatMode != Player.REPEAT_MODE_OFF) MaterialTheme.colorScheme.secondary else Color.Gray
+                              tint = if (repeatMode != Player.REPEAT_MODE_OFF) Color(0xFF00E5FF) else Color.Gray
                           )
                       }
                   }
@@ -1726,6 +2342,8 @@ jobs:
               title: String,
               artist: String,
               isPlaying: Boolean,
+              phase: Float,
+              amplitude: Float,
               positionMs: Long,
               durationMs: Long,
               shuffleEnabled: Boolean,
@@ -1735,13 +2353,46 @@ jobs:
               onNext: () -> Unit,
               onPrev: () -> Unit,
               onToggleShuffle: () -> Unit,
-              onToggleRepeat: () -> Unit
+              onToggleRepeat: () -> Unit,
+              onExpand: () -> Unit
           ) {
               Surface(color = MaterialTheme.colorScheme.surface, tonalElevation = 8.dp) {
-                  Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp)) {
-                      Text(title, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                      if (artist.isNotBlank()) {
-                          Text(artist, fontSize = 12.sp, color = Color.Gray, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                  Column(
+                      modifier = Modifier
+                          .fillMaxWidth()
+                          .navigationBarsPadding()
+                          .padding(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 12.dp)
+                  ) {
+                      Row(
+                          modifier = Modifier
+                              .fillMaxWidth()
+                              .clip(RoundedCornerShape(10.dp))
+                              .clickable(onClick = onExpand)
+                              .padding(vertical = 2.dp),
+                          verticalAlignment = Alignment.CenterVertically
+                      ) {
+                          if (isPlaying) {
+                              MiniEqualizerBars(phase = phase, amplitude = amplitude)
+                              Spacer(Modifier.width(10.dp))
+                          }
+                          Column(modifier = Modifier.weight(1f)) {
+                              Text(
+                                  title,
+                                  fontWeight = FontWeight.Bold,
+                                  maxLines = 1,
+                                  modifier = Modifier.basicMarquee()
+                              )
+                              if (artist.isNotBlank()) {
+                                  Text(artist, fontSize = 12.sp, color = Color.Gray, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                              }
+                          }
+                          IconButton(onClick = onExpand, modifier = Modifier.size(36.dp)) {
+                              Icon(
+                                  Icons.Default.Fullscreen,
+                                  contentDescription = stringResource(R.string.cd_fullscreen),
+                                  tint = Color(0xFF00E5FF)
+                              )
+                          }
                       }
 
                       CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
@@ -1758,6 +2409,8 @@ jobs:
                               Text(formatTime(durationMs), fontSize = 11.sp, color = Color.Gray)
                           }
 
+                          Spacer(Modifier.height(4.dp))
+
                           Row(
                               modifier = Modifier.fillMaxWidth(),
                               horizontalArrangement = Arrangement.SpaceEvenly,
@@ -1767,7 +2420,7 @@ jobs:
                                   icon = Icons.Default.Shuffle,
                                   contentDescription = stringResource(R.string.cd_shuffle),
                                   onClick = onToggleShuffle,
-                                  tint = if (shuffleEnabled) MaterialTheme.colorScheme.secondary else Color.Gray
+                                  tint = if (shuffleEnabled) Color(0xFF00E5FF) else Color.Gray
                               )
                               TvIconButton(Icons.Default.SkipPrevious, stringResource(R.string.cd_previous), onPrev)
                               TvIconButton(
@@ -1782,7 +2435,7 @@ jobs:
                                   icon = if (repeatMode == Player.REPEAT_MODE_ONE) Icons.Default.RepeatOne else Icons.Default.Repeat,
                                   contentDescription = stringResource(R.string.cd_repeat),
                                   onClick = onToggleRepeat,
-                                  tint = if (repeatMode != Player.REPEAT_MODE_OFF) MaterialTheme.colorScheme.secondary else Color.Gray
+                                  tint = if (repeatMode != Player.REPEAT_MODE_OFF) Color(0xFF00E5FF) else Color.Gray
                               )
                           }
                       }
