@@ -11,7 +11,10 @@ jobs:
     steps:
       - name: Generate Project Files
         run: |
-          mkdir -p app/src/main/java/com/pulse/player app/src/main/res/drawable
+          mkdir -p app/src/main/java/com/pulse/player \
+                   app/src/main/res/drawable \
+                   app/src/main/res/values \
+                   app/src/main/res/values-ar
 
           cat << 'EOF' > gradle.properties
           android.useAndroidX=true
@@ -60,8 +63,8 @@ jobs:
                   applicationId = "com.pulse.player"
                   minSdk = 26
                   targetSdk = 35
-                  versionCode = 3
-                  versionName = "1.2-Folders"
+                  versionCode = 4
+                  versionName = "1.3-MultiLang"
               }
 
               buildTypes {
@@ -99,6 +102,122 @@ jobs:
               implementation("androidx.media3:media3-common:1.4.1")
               implementation("com.google.guava:guava:33.3.1-android")
           }
+          EOF
+
+          cat << 'EOF' > app/src/main/res/values/strings.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <string name="app_name">Pulse Player</string>
+              <string name="select_song_prompt">Select a song to play</string>
+              <string name="unknown_artist">Unknown Artist</string>
+              <string name="untitled">Untitled</string>
+              <string name="root_folder">Root Folder</string>
+              <string name="local_folder">Local Folder</string>
+              <string name="login_failed">Login failed</string>
+              <string name="connection_failed">Connection failed: %1$s</string>
+              <string name="tab_phone">Phone (%1$d)</string>
+              <string name="tab_device">Device (%1$d)</string>
+              <string name="tab_homelab">Home Lab (%1$d)</string>
+              <string name="search_folders_or_songs">Search folders or songs...</string>
+              <string name="search_in_folder">Search in %1$s...</string>
+              <string name="songs_count">%1$d songs</string>
+              <string name="no_search_results">No matching results found</string>
+              <string name="no_local_folders">No visible audio folders found</string>
+              <string name="connect_navidrome_hint">Tap Settings to connect Navidrome</string>
+              <string name="restore_hidden_btn">Restore hidden folders &amp; songs</string>
+              <string name="no_songs_in_folder">No songs in this folder</string>
+              <string name="edit_server_settings">Edit Server Settings</string>
+              <string name="refresh">Refresh</string>
+              <string name="settings">Settings</string>
+              <string name="clear">Clear</string>
+              <string name="back_to_folders">Back to folders</string>
+              <string name="play_folder">Play folder</string>
+              <string name="hide_folder_cd">Hide folder from app</string>
+              <string name="manage_audio_title">Manage Audio File</string>
+              <string name="folder_label">Folder: %1$s</string>
+              <string name="hide_song_only">Hide song from app only</string>
+              <string name="hide_entire_folder">Hide entire folder (%1$s)</string>
+              <string name="delete_permanently">Delete file permanently from device</string>
+              <string name="cancel">Cancel</string>
+              <string name="close">Close</string>
+              <string name="save_and_connect">Save &amp; Connect</string>
+              <string name="settings_dialog_title">Settings &amp; Home Lab</string>
+              <string name="server_url_label">Navidrome URL (http://192.168.x.x:4533)</string>
+              <string name="username_label">Username</string>
+              <string name="password_label">Password</string>
+              <string name="restore_hidden_count">Restore hidden (%1$d folders, %2$d songs)</string>
+              <string name="toast_deleted">File deleted from device</string>
+              <string name="toast_delete_failed_hidden">Direct delete unavailable, hidden from app</string>
+              <string name="toast_song_hidden">Song hidden from app</string>
+              <string name="toast_folder_hidden">Folder hidden: %1$s</string>
+              <string name="toast_restored">All hidden files and folders restored</string>
+              <string name="cd_delete_or_hide">Delete or hide</string>
+              <string name="cd_previous">Previous</string>
+              <string name="cd_rewind">Rewind 15s</string>
+              <string name="cd_play_pause">Play / Pause</string>
+              <string name="cd_forward">Forward 15s</string>
+              <string name="cd_next">Next</string>
+              <string name="cd_shuffle">Shuffle</string>
+              <string name="cd_repeat">Repeat</string>
+          </resources>
+          EOF
+
+          cat << 'EOF' > app/src/main/res/values-ar/strings.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <string name="app_name">Pulse Player</string>
+              <string name="select_song_prompt">اختر أغنية للتشغيل</string>
+              <string name="unknown_artist">فنان غير معروف</string>
+              <string name="untitled">بدون عنوان</string>
+              <string name="root_folder">المجلد الرئيسي</string>
+              <string name="local_folder">مجلد محلي</string>
+              <string name="login_failed">فشل تسجيل الدخول</string>
+              <string name="connection_failed">تعذر الاتصال: %1$s</string>
+              <string name="tab_phone">الهاتف (%1$d)</string>
+              <string name="tab_device">الجهاز (%1$d)</string>
+              <string name="tab_homelab">الهوم لاب (%1$d)</string>
+              <string name="search_folders_or_songs">ابحث عن مجلد أو أغنية...</string>
+              <string name="search_in_folder">ابحث داخل مجلد %1$s...</string>
+              <string name="songs_count">%1$d أغنية</string>
+              <string name="no_search_results">لا توجد نتائج مطابقة للبحث</string>
+              <string name="no_local_folders">لا توجد مجلدات صوتية ظاهرة</string>
+              <string name="connect_navidrome_hint">اضغط أيقونة الإعدادات لربط Navidrome</string>
+              <string name="restore_hidden_btn">استعادة المجلدات والأغاني المخفية</string>
+              <string name="no_songs_in_folder">لا توجد أغاني في هذا المجلد</string>
+              <string name="edit_server_settings">تعديل إعدادات السيرفر</string>
+              <string name="refresh">تحديث</string>
+              <string name="settings">الإعدادات</string>
+              <string name="clear">مسح</string>
+              <string name="back_to_folders">العودة للمجلدات</string>
+              <string name="play_folder">تشغيل المجلد</string>
+              <string name="hide_folder_cd">إخفاء المجلد من التطبيق</string>
+              <string name="manage_audio_title">إدارة الملف الصوتي</string>
+              <string name="folder_label">المجلد: %1$s</string>
+              <string name="hide_song_only">إخفاء الأغنية من البرنامج فقط</string>
+              <string name="hide_entire_folder">إخفاء مجلد (%1$s) بالكامل</string>
+              <string name="delete_permanently">حذف الملف نهائياً من الجهاز</string>
+              <string name="cancel">إلغاء</string>
+              <string name="close">إغلاق</string>
+              <string name="save_and_connect">حفظ واتصال</string>
+              <string name="settings_dialog_title">الإعدادات والهوم لاب</string>
+              <string name="server_url_label">رابط Navidrome (http://192.168.x.x:4533)</string>
+              <string name="username_label">اسم المستخدم</string>
+              <string name="password_label">كلمة المرور</string>
+              <string name="restore_hidden_count">استعادة المخفي (%1$d مجلد، %2$d أغنية)</string>
+              <string name="toast_deleted">تم حذف الملف من الجهاز</string>
+              <string name="toast_delete_failed_hidden">تعذر الحذف المباشر، تم إخفاء الملف من البرنامج</string>
+              <string name="toast_song_hidden">تم إخفاء الأغنية من البرنامج</string>
+              <string name="toast_folder_hidden">تم إخفاء مجلد %1$s</string>
+              <string name="toast_restored">تمت استعادة جميع الملفات والمجلدات المخفية</string>
+              <string name="cd_delete_or_hide">حذف أو إخفاء</string>
+              <string name="cd_previous">السابق</string>
+              <string name="cd_rewind">تأخير 15 ثانية</string>
+              <string name="cd_play_pause">تشغيل/إيقاف</string>
+              <string name="cd_forward">تقديم 15 ثانية</string>
+              <string name="cd_next">التالي</string>
+              <string name="cd_shuffle">عشوائي</string>
+              <string name="cd_repeat">تكرار</string>
+          </resources>
           EOF
 
           cat << 'EOF' > app/src/main/res/drawable/ic_launcher.xml
@@ -164,9 +283,10 @@ jobs:
 
               <application
                   android:allowBackup="true"
+                  android:supportsRtl="true"
                   android:icon="@drawable/ic_launcher"
                   android:banner="@drawable/tv_banner"
-                  android:label="Pulse Player"
+                  android:label="@string/app_name"
                   android:usesCleartextTraffic="true"
                   android:theme="@android:style/Theme.Material.NoActionBar">
 
@@ -283,6 +403,9 @@ jobs:
 
               suspend fun loadLocalSongs(context: Context): List<SongItem> = withContext(Dispatchers.IO) {
                   val songs = mutableListOf<SongItem>()
+                  val untitled = context.getString(R.string.untitled)
+                  val unknownArtist = context.getString(R.string.unknown_artist)
+
                   val projection = mutableListOf(
                       MediaStore.Audio.Media._ID,
                       MediaStore.Audio.Media.TITLE,
@@ -327,12 +450,12 @@ jobs:
                                   MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, id
                               ).toString()
                               val rawPath = if (pathCol >= 0) cursor.getString(pathCol) ?: "" else ""
-                              val folderName = cleanLocalFolder(rawPath)
+                              val folderName = cleanLocalFolder(context, rawPath)
                               songs.add(
                                   SongItem(
                                       id = "local_$id",
-                                      title = cursor.getString(titleCol) ?: "بدون عنوان",
-                                      artist = cursor.getString(artistCol)?.takeIf { it != "<unknown>" } ?: "فنان غير معروف",
+                                      title = cursor.getString(titleCol) ?: untitled,
+                                      artist = cursor.getString(artistCol)?.takeIf { it != "<unknown>" } ?: unknownArtist,
                                       album = cursor.getString(albumCol) ?: "",
                                       folder = folderName,
                                       durationMs = cursor.getLong(durCol),
@@ -345,22 +468,24 @@ jobs:
                   }
 
                   if (songs.isEmpty()) {
-                      songs.addAll(scanFallbackFolders())
+                      songs.addAll(scanFallbackFolders(context))
                   }
                   songs
               }
 
-              private fun cleanLocalFolder(rawPath: String): String {
+              private fun cleanLocalFolder(context: Context, rawPath: String): String {
+                  val rootFallback = context.getString(R.string.root_folder)
                   val normalized = rawPath.replace('\\', '/').trim('/')
-                  if (normalized.isBlank()) return "المجلد الرئيسي"
+                  if (normalized.isBlank()) return rootFallback
                   return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                       normalized
                   } else {
-                      File(rawPath).parentFile?.name?.ifBlank { "المجلد الرئيسي" } ?: "المجلد الرئيسي"
+                      File(rawPath).parentFile?.name?.ifBlank { rootFallback } ?: rootFallback
                   }
               }
 
-              private fun scanFallbackFolders(): List<SongItem> {
+              private fun scanFallbackFolders(context: Context): List<SongItem> {
+                  val localFallback = context.getString(R.string.local_folder)
                   val allowed = setOf("mp3", "flac", "wav", "m4a", "ogg", "aac")
                   val dirs = listOfNotNull(
                       Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC),
@@ -372,13 +497,14 @@ jobs:
                           if (dir.exists() && dir.isDirectory) {
                               dir.walkTopDown().maxDepth(4).forEach { file ->
                                   if (file.isFile && file.extension.lowercase() in allowed) {
+                                      val folderName = file.parentFile?.name ?: localFallback
                                       found.add(
                                           SongItem(
                                               id = "file_${file.absolutePath.hashCode()}",
                                               title = file.nameWithoutExtension,
-                                              artist = file.parentFile?.name ?: "مجلد محلي",
+                                              artist = folderName,
                                               album = "",
-                                              folder = file.parentFile?.name ?: "مجلد محلي",
+                                              folder = folderName,
                                               durationMs = 0L,
                                               uri = Uri.fromFile(file).toString(),
                                               isRemote = false
@@ -393,11 +519,14 @@ jobs:
               }
 
               suspend fun loadHomeLabSongs(
+                  context: Context,
                   rawServerUrl: String,
                   username: String,
                   password: String
               ): Result<List<SongItem>> = withContext(Dispatchers.IO) {
                   runCatching {
+                      val untitled = context.getString(R.string.untitled)
+                      val loginFailed = context.getString(R.string.login_failed)
                       val baseUrl = normalizeUrl(rawServerUrl)
                       val salt = UUID.randomUUID().toString().take(8)
                       val token = md5(password + salt)
@@ -419,7 +548,7 @@ jobs:
                           val body = conn.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
                           val subsonic = JSONObject(body).getJSONObject("subsonic-response")
                           if (subsonic.optString("status") != "ok") {
-                              val errMsg = subsonic.optJSONObject("error")?.optString("message") ?: "فشل تسجيل الدخول"
+                              val errMsg = subsonic.optJSONObject("error")?.optString("message") ?: loginFailed
                               throw IllegalStateException(errMsg)
                           }
 
@@ -431,10 +560,10 @@ jobs:
                               val songId = obj.getString("id")
                               val rawPath = obj.optString("path", "").replace('\\', '/').trim('/')
                               val album = obj.optString("album", "")
-                              val folderName = extractRemoteFolder(rawPath, album)
+                              val folderName = extractRemoteFolder(context, rawPath, album)
                               val fileNameTitle = rawPath.substringAfterLast('/').substringBeforeLast('.')
                               val title = obj.optString("title", "").ifBlank {
-                                  fileNameTitle.ifBlank { "بدون عنوان" }
+                                  fileNameTitle.ifBlank { untitled }
                               }
                               val artist = obj.optString("artist", "").ifBlank { folderName }
                               val streamUrl = "$baseUrl/rest/stream.view?id=$songId&$authParams"
@@ -460,12 +589,13 @@ jobs:
                   }
               }
 
-              private fun extractRemoteFolder(rawPath: String, fallbackAlbum: String): String {
+              private fun extractRemoteFolder(context: Context, rawPath: String, fallbackAlbum: String): String {
+                  val rootFallback = context.getString(R.string.root_folder)
                   if (rawPath.isNotBlank()) {
                       val parentPath = rawPath.substringBeforeLast('/', "")
-                      return if (parentPath.isNotBlank()) parentPath else "المجلد الرئيسي"
+                      return if (parentPath.isNotBlank()) parentPath else rootFallback
                   }
-                  return fallbackAlbum.ifBlank { "المجلد الرئيسي" }
+                  return fallbackAlbum.ifBlank { rootFallback }
               }
 
               private fun normalizeUrl(url: String): String {
@@ -514,6 +644,7 @@ jobs:
           import androidx.compose.foundation.shape.CircleShape
           import androidx.compose.foundation.shape.RoundedCornerShape
           import androidx.compose.material.icons.Icons
+          import androidx.compose.material.icons.automirrored.filled.ArrowBack
           import androidx.compose.material.icons.filled.*
           import androidx.compose.material3.*
           import androidx.compose.runtime.*
@@ -526,6 +657,7 @@ jobs:
           import androidx.compose.ui.platform.LocalConfiguration
           import androidx.compose.ui.platform.LocalContext
           import androidx.compose.ui.platform.LocalLayoutDirection
+          import androidx.compose.ui.res.stringResource
           import androidx.compose.ui.text.font.FontWeight
           import androidx.compose.ui.text.input.PasswordVisualTransformation
           import androidx.compose.ui.text.style.TextAlign
@@ -543,6 +675,7 @@ jobs:
           import kotlinx.coroutines.delay
           import kotlinx.coroutines.launch
           import java.io.File
+          import java.util.Locale
 
           class MainActivity : ComponentActivity() {
               private var controllerFuture: ListenableFuture<MediaController>? = null
@@ -577,10 +710,8 @@ jobs:
                               onSurface = Color.White
                           )
                       ) {
-                          CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
-                              Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                                  PulseApp(player = playerState.value)
-                              }
+                          Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                              PulseApp(player = playerState.value)
                           }
                       }
                   }
@@ -602,11 +733,9 @@ jobs:
               var localSongs by remember { mutableStateOf<List<SongItem>>(emptyList()) }
               var remoteSongs by remember { mutableStateOf<List<SongItem>>(emptyList()) }
 
-              // المجلد المفتوح حالياً لكل تبويب (null = قائمة المجلدات)
               var selectedLocalFolder by remember { mutableStateOf<String?>(null) }
               var selectedRemoteFolder by remember { mutableStateOf<String?>(null) }
 
-              // قائمة الأغاني والمجلدات المخفية من الهاتف
               var hiddenSongIds by remember {
                   mutableStateOf(prefs.getStringSet("hidden_songs", emptySet())?.toSet() ?: emptySet())
               }
@@ -618,18 +747,16 @@ jobs:
               var isLoadingRemote by remember { mutableStateOf(false) }
               var remoteError by remember { mutableStateOf<String?>(null) }
 
-              // نافذة حذف/إخفاء أغنية محلية
               var songToManage by remember { mutableStateOf<SongItem?>(null) }
 
-              // إعدادات السيرفر
               var showServerDialog by remember { mutableStateOf(false) }
               var serverUrl by remember { mutableStateOf(prefs.getString("url", "http://192.168.1.100:4533") ?: "") }
               var serverUser by remember { mutableStateOf(prefs.getString("user", "") ?: "") }
               var serverPass by remember { mutableStateOf(prefs.getString("pass", "") ?: "") }
 
-              // حالة المشغل
+              val defaultPrompt = stringResource(R.string.select_song_prompt)
               var isPlaying by remember { mutableStateOf(false) }
-              var currentTitle by remember { mutableStateOf("اختر أغنية للتشغيل") }
+              var currentTitle by remember { mutableStateOf(defaultPrompt) }
               var currentArtist by remember { mutableStateOf("") }
               var currentMediaId by remember { mutableStateOf("") }
               var positionMs by remember { mutableLongStateOf(0L) }
@@ -668,19 +795,20 @@ jobs:
                   scope.launch {
                       isLoadingRemote = true
                       remoteError = null
-                      MusicRepository.loadHomeLabSongs(serverUrl, serverUser, serverPass)
+                      MusicRepository.loadHomeLabSongs(context, serverUrl, serverUser, serverPass)
                           .onSuccess { remoteSongs = it }
-                          .onFailure { remoteError = "تعذر الاتصال: ${it.localizedMessage}" }
+                          .onFailure {
+                              remoteError = context.getString(R.string.connection_failed, it.localizedMessage ?: "")
+                          }
                       isLoadingRemote = false
                   }
               }
 
-              // معالج نافذة تأكيد الحذف النهائي على أندرويد 11+
               val deleteLauncher = rememberLauncherForActivityResult(
                   ActivityResultContracts.StartIntentSenderForResult()
               ) { result ->
                   if (result.resultCode == Activity.RESULT_OK) {
-                      Toast.makeText(context, "تم حذف الملف من الجهاز", Toast.LENGTH_SHORT).show()
+                      Toast.makeText(context, context.getString(R.string.toast_deleted), Toast.LENGTH_SHORT).show()
                       refreshLocal()
                   }
               }
@@ -697,30 +825,29 @@ jobs:
                           } else {
                               val deleted = context.contentResolver.delete(uri, null, null)
                               if (deleted > 0) {
-                                  Toast.makeText(context, "تم حذف الملف من الجهاز", Toast.LENGTH_SHORT).show()
+                                  Toast.makeText(context, context.getString(R.string.toast_deleted), Toast.LENGTH_SHORT).show()
                                   refreshLocal()
                               } else {
                                   hideSong(song.id)
-                                  Toast.makeText(context, "تعذر الحذف المباشر، تم إخفاء الملف من البرنامج", Toast.LENGTH_SHORT).show()
+                                  Toast.makeText(context, context.getString(R.string.toast_delete_failed_hidden), Toast.LENGTH_SHORT).show()
                               }
                           }
                       } else if (song.uri.startsWith("file://")) {
                           val file = uri.path?.let { File(it) }
                           if (file != null && file.delete()) {
-                              Toast.makeText(context, "تم حذف الملف من الجهاز", Toast.LENGTH_SHORT).show()
+                              Toast.makeText(context, context.getString(R.string.toast_deleted), Toast.LENGTH_SHORT).show()
                               refreshLocal()
                           } else {
                               hideSong(song.id)
-                              Toast.makeText(context, "تعذر الحذف المباشر، تم إخفاء الملف من البرنامج", Toast.LENGTH_SHORT).show()
+                              Toast.makeText(context, context.getString(R.string.toast_delete_failed_hidden), Toast.LENGTH_SHORT).show()
                           }
                       }
                   }.onFailure {
                       hideSong(song.id)
-                      Toast.makeText(context, "تم إخفاء الملف من البرنامج", Toast.LENGTH_SHORT).show()
+                      Toast.makeText(context, context.getString(R.string.toast_song_hidden), Toast.LENGTH_SHORT).show()
                   }
               }
 
-              // زر الرجوع في الهاتف أو الريموت يعود لقائمة المجلدات أولاً
               val currentOpenFolder = if (selectedTab == 0) selectedLocalFolder else selectedRemoteFolder
               BackHandler(enabled = currentOpenFolder != null) {
                   if (selectedTab == 0) selectedLocalFolder = null else selectedRemoteFolder = null
@@ -758,7 +885,8 @@ jobs:
                   fun syncState() {
                       isPlaying = player.isPlaying
                       currentMediaId = player.currentMediaItem?.mediaId ?: ""
-                      currentTitle = player.mediaMetadata.title?.toString() ?: "اختر أغنية للتشغيل"
+                      currentTitle = player.mediaMetadata.title?.toString()
+                          ?: context.getString(R.string.select_song_prompt)
                       currentArtist = player.mediaMetadata.artist?.toString() ?: ""
                       durationMs = player.duration.coerceAtLeast(0L)
                       positionMs = player.currentPosition.coerceAtLeast(0L)
@@ -782,12 +910,10 @@ jobs:
                   }
               }
 
-              // تصفية الأغاني المخفية على الهاتف
               val visibleLocalSongs = remember(localSongs, hiddenSongIds, hiddenLocalFolders) {
                   localSongs.filter { it.id !in hiddenSongIds && it.folder !in hiddenLocalFolders }
               }
 
-              // تجميع المجلدات لكل تبويب
               val localFolders = remember(visibleLocalSongs) {
                   visibleLocalSongs
                       .groupBy { it.folder }
@@ -865,7 +991,7 @@ jobs:
                                       contentDescription = null,
                                       tint = MaterialTheme.colorScheme.secondary
                                   )
-                                  Text("Pulse Player", fontWeight = FontWeight.Bold)
+                                  Text(stringResource(R.string.app_name), fontWeight = FontWeight.Bold)
                               }
                           },
                           colors = TopAppBarDefaults.topAppBarColors(
@@ -874,13 +1000,13 @@ jobs:
                           actions = {
                               TvIconButton(
                                   icon = Icons.Default.Refresh,
-                                  contentDescription = "تحديث",
+                                  contentDescription = stringResource(R.string.refresh),
                                   onClick = { if (selectedTab == 0) refreshLocal() else refreshHomeLab() }
                               )
                               Spacer(Modifier.width(4.dp))
                               TvIconButton(
                                   icon = Icons.Default.Settings,
-                                  contentDescription = "الإعدادات",
+                                  contentDescription = stringResource(R.string.settings),
                                   onClick = { showServerDialog = true }
                               )
                               Spacer(Modifier.width(8.dp))
@@ -909,7 +1035,6 @@ jobs:
               ) { padding ->
                   val libraryContent: @Composable (Modifier) -> Unit = { mod ->
                       Column(modifier = mod) {
-                          // أزرار التبديل بين الهاتف والهوم لاب
                           Row(
                               modifier = Modifier
                                   .fillMaxWidth()
@@ -917,7 +1042,11 @@ jobs:
                               horizontalArrangement = Arrangement.spacedBy(10.dp)
                           ) {
                               TvTabButton(
-                                  label = if (isTv) "الجهاز (${localFolders.size} مجلد)" else "الهاتف (${localFolders.size} مجلد)",
+                                  label = if (isTv) {
+                                      stringResource(R.string.tab_device, localFolders.size)
+                                  } else {
+                                      stringResource(R.string.tab_phone, localFolders.size)
+                                  },
                                   icon = if (isTv) Icons.Default.Tv else Icons.Default.PhoneAndroid,
                                   selected = selectedTab == 0,
                                   onClick = {
@@ -927,7 +1056,7 @@ jobs:
                                   modifier = Modifier.weight(1f)
                               )
                               TvTabButton(
-                                  label = "الهوم لاب (${remoteFolders.size} مجلد)",
+                                  label = stringResource(R.string.tab_homelab, remoteFolders.size),
                                   icon = Icons.Default.Cloud,
                                   selected = selectedTab == 1,
                                   onClick = {
@@ -939,21 +1068,23 @@ jobs:
                               )
                           }
 
-                          // شريط البحث
                           OutlinedTextField(
                               value = searchQuery,
                               onValueChange = { searchQuery = it },
                               placeholder = {
                                   Text(
-                                      if (currentOpenFolder == null) "ابحث عن مجلد أو أغنية..."
-                                      else "ابحث داخل مجلد $currentOpenFolder..."
+                                      if (currentOpenFolder == null) {
+                                          stringResource(R.string.search_folders_or_songs)
+                                      } else {
+                                          stringResource(R.string.search_in_folder, currentOpenFolder)
+                                      }
                                   )
                               },
                               leadingIcon = { Icon(Icons.Default.Search, null) },
                               trailingIcon = {
                                   if (searchQuery.isNotEmpty()) {
                                       IconButton(onClick = { searchQuery = "" }) {
-                                          Icon(Icons.Default.Close, contentDescription = "مسح")
+                                          Icon(Icons.Default.Close, contentDescription = stringResource(R.string.clear))
                                       }
                                   }
                               },
@@ -963,7 +1094,6 @@ jobs:
                                   .padding(horizontal = 12.dp, vertical = 4.dp)
                           )
 
-                          // شريط المجلد المفتوح حالياً (زر رجوع + اسم المجلد + تشغيل الكل)
                           if (currentOpenFolder != null) {
                               val openSongs = activeFolders.firstOrNull { it.name == currentOpenFolder }?.songs ?: emptyList()
                               Surface(
@@ -978,8 +1108,8 @@ jobs:
                                       verticalAlignment = Alignment.CenterVertically
                                   ) {
                                       TvIconButton(
-                                          icon = Icons.Default.ArrowBack,
-                                          contentDescription = "العودة للمجلدات",
+                                          icon = Icons.AutoMirrored.Filled.ArrowBack,
+                                          contentDescription = stringResource(R.string.back_to_folders),
                                           onClick = {
                                               if (selectedTab == 0) selectedLocalFolder = null else selectedRemoteFolder = null
                                               searchQuery = ""
@@ -996,12 +1126,16 @@ jobs:
                                               maxLines = 1,
                                               overflow = TextOverflow.Ellipsis
                                           )
-                                          Text("${openSongs.size} أغنية", fontSize = 12.sp, color = Color.Gray)
+                                          Text(
+                                              stringResource(R.string.songs_count, openSongs.size),
+                                              fontSize = 12.sp,
+                                              color = Color.Gray
+                                          )
                                       }
                                       if (openSongs.isNotEmpty()) {
                                           TvIconButton(
                                               icon = Icons.Default.PlayArrow,
-                                              contentDescription = "تشغيل المجلد",
+                                              contentDescription = stringResource(R.string.play_folder),
                                               onClick = { playListFromIndex(openSongs, 0) },
                                               filled = true,
                                               size = 40
@@ -1011,7 +1145,6 @@ jobs:
                               }
                           }
 
-                          // المحتوى الرئيسي: تحميل / خطأ / مجلدات / أغاني
                           if (selectedTab == 1 && isLoadingRemote) {
                               Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                                   CircularProgressIndicator()
@@ -1025,11 +1158,10 @@ jobs:
                                   Text(remoteError!!, color = Color(0xFFFF6E6E), textAlign = TextAlign.Center)
                                   Spacer(Modifier.height(12.dp))
                                   Button(onClick = { showServerDialog = true }) {
-                                      Text("تعديل إعدادات السيرفر")
+                                      Text(stringResource(R.string.edit_server_settings))
                                   }
                               }
                           } else if (currentOpenFolder == null) {
-                              // حالة عرض المجلدات (أو نتائج البحث الشاملة عند الكتابة في البحث)
                               if (searchQuery.isNotBlank()) {
                                   val matchedSongs = allTabSongs.filter {
                                       it.title.contains(searchQuery, ignoreCase = true) ||
@@ -1038,7 +1170,7 @@ jobs:
                                   }
                                   if (matchedSongs.isEmpty()) {
                                       Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                          Text("لا توجد نتائج مطابقة للبحث", color = Color.Gray)
+                                          Text(stringResource(R.string.no_search_results), color = Color.Gray)
                                       }
                                   } else {
                                       LazyColumn(
@@ -1064,15 +1196,18 @@ jobs:
                                       verticalArrangement = Arrangement.Center
                                   ) {
                                       Text(
-                                          if (selectedTab == 0) "لا توجد مجلدات صوتية ظاهرة"
-                                          else "اضغط أيقونة الإعدادات لربط Navidrome",
+                                          if (selectedTab == 0) {
+                                              stringResource(R.string.no_local_folders)
+                                          } else {
+                                              stringResource(R.string.connect_navidrome_hint)
+                                          },
                                           color = Color.Gray,
                                           textAlign = TextAlign.Center
                                       )
                                       if (selectedTab == 0 && (hiddenLocalFolders.isNotEmpty() || hiddenSongIds.isNotEmpty())) {
                                           Spacer(Modifier.height(12.dp))
                                           Button(onClick = { saveHiddenSets(emptySet(), emptySet()) }) {
-                                              Text("استعادة المجلدات والأغاني المخفية")
+                                              Text(stringResource(R.string.restore_hidden_btn))
                                           }
                                       }
                                   }
@@ -1093,7 +1228,11 @@ jobs:
                                               onHideFolder = if (selectedTab == 0) {
                                                   {
                                                       hideLocalFolder(folder.name)
-                                                      Toast.makeText(context, "تم إخفاء مجلد ${folder.name}", Toast.LENGTH_SHORT).show()
+                                                      Toast.makeText(
+                                                          context,
+                                                          context.getString(R.string.toast_folder_hidden, folder.name),
+                                                          Toast.LENGTH_SHORT
+                                                      ).show()
                                                   }
                                               } else null
                                           )
@@ -1101,7 +1240,6 @@ jobs:
                                   }
                               }
                           } else {
-                              // حالة عرض الأغاني داخل المجلد المختار فقط
                               val folderSongs = (activeFolders.firstOrNull { it.name == currentOpenFolder }?.songs ?: emptyList())
                                   .filter {
                                       searchQuery.isBlank() ||
@@ -1111,7 +1249,7 @@ jobs:
 
                               if (folderSongs.isEmpty()) {
                                   Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                      Text("لا توجد أغاني في هذا المجلد", color = Color.Gray)
+                                      Text(stringResource(R.string.no_songs_in_folder), color = Color.Gray)
                                   }
                               } else {
                                   LazyColumn(
@@ -1166,35 +1304,38 @@ jobs:
                   }
               }
 
-              // نافذة حذف أو إخفاء أغنية محلية
               songToManage?.let { song ->
                   AlertDialog(
                       onDismissRequest = { songToManage = null },
-                      title = { Text("إدارة الملف الصوتي", fontWeight = FontWeight.Bold) },
+                      title = { Text(stringResource(R.string.manage_audio_title), fontWeight = FontWeight.Bold) },
                       text = {
                           Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                               Text(song.title, color = MaterialTheme.colorScheme.secondary, fontWeight = FontWeight.SemiBold)
-                              Text("المجلد: ${song.folder}", fontSize = 12.sp, color = Color.Gray)
+                              Text(stringResource(R.string.folder_label, song.folder), fontSize = 12.sp, color = Color.Gray)
                               Spacer(Modifier.height(4.dp))
                               Button(
                                   onClick = {
                                       hideSong(song.id)
                                       songToManage = null
-                                      Toast.makeText(context, "تم إخفاء الأغنية من البرنامج", Toast.LENGTH_SHORT).show()
+                                      Toast.makeText(context, context.getString(R.string.toast_song_hidden), Toast.LENGTH_SHORT).show()
                                   },
                                   modifier = Modifier.fillMaxWidth()
                               ) {
-                                  Text("إخفاء الأغنية من البرنامج فقط")
+                                  Text(stringResource(R.string.hide_song_only))
                               }
                               OutlinedButton(
                                   onClick = {
                                       hideLocalFolder(song.folder)
                                       songToManage = null
-                                      Toast.makeText(context, "تم إخفاء المجلد بالكامل من البرنامج", Toast.LENGTH_SHORT).show()
+                                      Toast.makeText(
+                                          context,
+                                          context.getString(R.string.toast_folder_hidden, song.folder),
+                                          Toast.LENGTH_SHORT
+                                      ).show()
                                   },
                                   modifier = Modifier.fillMaxWidth()
                               ) {
-                                  Text("إخفاء مجلد (${song.folder}) بالكامل")
+                                  Text(stringResource(R.string.hide_entire_folder, song.folder))
                               }
                               Button(
                                   onClick = {
@@ -1205,40 +1346,39 @@ jobs:
                                   colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFB71C1C)),
                                   modifier = Modifier.fillMaxWidth()
                               ) {
-                                  Text("حذف الملف نهائياً من الهاتف", color = Color.White)
+                                  Text(stringResource(R.string.delete_permanently), color = Color.White)
                               }
                           }
                       },
                       confirmButton = {},
                       dismissButton = {
-                          TextButton(onClick = { songToManage = null }) { Text("إلغاء") }
+                          TextButton(onClick = { songToManage = null }) { Text(stringResource(R.string.cancel)) }
                       }
                   )
               }
 
-              // نافذة الإعدادات (الهوم لاب + استعادة المخفي)
               if (showServerDialog) {
                   AlertDialog(
                       onDismissRequest = { showServerDialog = false },
-                      title = { Text("الإعدادات والهوم لاب") },
+                      title = { Text(stringResource(R.string.settings_dialog_title)) },
                       text = {
                           Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                               OutlinedTextField(
                                   value = serverUrl,
                                   onValueChange = { serverUrl = it },
-                                  label = { Text("رابط Navidrome (http://192.168.x.x:4533)") },
+                                  label = { Text(stringResource(R.string.server_url_label)) },
                                   singleLine = true
                               )
                               OutlinedTextField(
                                   value = serverUser,
                                   onValueChange = { serverUser = it },
-                                  label = { Text("اسم المستخدم") },
+                                  label = { Text(stringResource(R.string.username_label)) },
                                   singleLine = true
                               )
                               OutlinedTextField(
                                   value = serverPass,
                                   onValueChange = { serverPass = it },
-                                  label = { Text("كلمة المرور") },
+                                  label = { Text(stringResource(R.string.password_label)) },
                                   visualTransformation = PasswordVisualTransformation(),
                                   singleLine = true
                               )
@@ -1247,13 +1387,13 @@ jobs:
                                   OutlinedButton(
                                       onClick = {
                                           saveHiddenSets(emptySet(), emptySet())
-                                          Toast.makeText(context, "تمت استعادة جميع الملفات والمجلدات المخفية", Toast.LENGTH_SHORT).show()
+                                          Toast.makeText(context, context.getString(R.string.toast_restored), Toast.LENGTH_SHORT).show()
                                       },
                                       modifier = Modifier.fillMaxWidth()
                                   ) {
                                       Icon(Icons.Default.Restore, contentDescription = null, modifier = Modifier.size(18.dp))
                                       Spacer(Modifier.width(6.dp))
-                                      Text("استعادة المخفي (${hiddenLocalFolders.size} مجلد، ${hiddenSongIds.size} أغنية)")
+                                      Text(stringResource(R.string.restore_hidden_count, hiddenLocalFolders.size, hiddenSongIds.size))
                                   }
                               }
                           }
@@ -1269,10 +1409,10 @@ jobs:
                               selectedTab = 1
                               selectedRemoteFolder = null
                               refreshHomeLab()
-                          }) { Text("حفظ واتصال") }
+                          }) { Text(stringResource(R.string.save_and_connect)) }
                       },
                       dismissButton = {
-                          TextButton(onClick = { showServerDialog = false }) { Text("إغلاق") }
+                          TextButton(onClick = { showServerDialog = false }) { Text(stringResource(R.string.close)) }
                       }
                   )
               }
@@ -1331,7 +1471,7 @@ jobs:
                               )
                               Spacer(Modifier.height(2.dp))
                               Text(
-                                  "${folder.songs.size} أغنية",
+                                  stringResource(R.string.songs_count, folder.songs.size),
                                   fontSize = 12.sp,
                                   color = Color.Gray
                               )
@@ -1342,7 +1482,7 @@ jobs:
                   if (onHideFolder != null) {
                       TvIconButton(
                           icon = Icons.Default.VisibilityOff,
-                          contentDescription = "إخفاء المجلد من التطبيق",
+                          contentDescription = stringResource(R.string.hide_folder_cd),
                           onClick = onHideFolder,
                           tint = Color(0xFFFF8A80),
                           size = 44
@@ -1454,7 +1594,7 @@ jobs:
                   if (onManageClick != null) {
                       TvIconButton(
                           icon = Icons.Default.Delete,
-                          contentDescription = "حذف أو إخفاء",
+                          contentDescription = stringResource(R.string.cd_delete_or_hide),
                           onClick = onManageClick,
                           tint = Color(0xFFFF8A80),
                           size = 42
@@ -1546,17 +1686,17 @@ jobs:
                               horizontalArrangement = Arrangement.SpaceEvenly,
                               verticalAlignment = Alignment.CenterVertically
                           ) {
-                              TvIconButton(Icons.Default.SkipPrevious, "السابق", onPrev)
-                              TvIconButton(Icons.Default.FastRewind, "تأخير 15 ثانية", onRewind)
+                              TvIconButton(Icons.Default.SkipPrevious, stringResource(R.string.cd_previous), onPrev)
+                              TvIconButton(Icons.Default.FastRewind, stringResource(R.string.cd_rewind), onRewind)
                               TvIconButton(
                                   icon = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                                  contentDescription = "تشغيل/إيقاف",
+                                  contentDescription = stringResource(R.string.cd_play_pause),
                                   onClick = onPlayPause,
                                   filled = true,
                                   size = 60
                               )
-                              TvIconButton(Icons.Default.FastForward, "تقديم 15 ثانية", onForward)
-                              TvIconButton(Icons.Default.SkipNext, "التالي", onNext)
+                              TvIconButton(Icons.Default.FastForward, stringResource(R.string.cd_forward), onForward)
+                              TvIconButton(Icons.Default.SkipNext, stringResource(R.string.cd_next), onNext)
                           }
                       }
 
@@ -1566,13 +1706,13 @@ jobs:
                       ) {
                           TvIconButton(
                               icon = Icons.Default.Shuffle,
-                              contentDescription = "عشوائي",
+                              contentDescription = stringResource(R.string.cd_shuffle),
                               onClick = onToggleShuffle,
                               tint = if (shuffleEnabled) MaterialTheme.colorScheme.secondary else Color.Gray
                           )
                           TvIconButton(
                               icon = if (repeatMode == Player.REPEAT_MODE_ONE) Icons.Default.RepeatOne else Icons.Default.Repeat,
-                              contentDescription = "تكرار",
+                              contentDescription = stringResource(R.string.cd_repeat),
                               onClick = onToggleRepeat,
                               tint = if (repeatMode != Player.REPEAT_MODE_OFF) MaterialTheme.colorScheme.secondary else Color.Gray
                           )
@@ -1625,22 +1765,22 @@ jobs:
                           ) {
                               TvIconButton(
                                   icon = Icons.Default.Shuffle,
-                                  contentDescription = "عشوائي",
+                                  contentDescription = stringResource(R.string.cd_shuffle),
                                   onClick = onToggleShuffle,
                                   tint = if (shuffleEnabled) MaterialTheme.colorScheme.secondary else Color.Gray
                               )
-                              TvIconButton(Icons.Default.SkipPrevious, "السابق", onPrev)
+                              TvIconButton(Icons.Default.SkipPrevious, stringResource(R.string.cd_previous), onPrev)
                               TvIconButton(
                                   icon = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                                  contentDescription = "تشغيل/إيقاف",
+                                  contentDescription = stringResource(R.string.cd_play_pause),
                                   onClick = onPlayPause,
                                   filled = true,
                                   size = 52
                               )
-                              TvIconButton(Icons.Default.SkipNext, "التالي", onNext)
+                              TvIconButton(Icons.Default.SkipNext, stringResource(R.string.cd_next), onNext)
                               TvIconButton(
                                   icon = if (repeatMode == Player.REPEAT_MODE_ONE) Icons.Default.RepeatOne else Icons.Default.Repeat,
-                                  contentDescription = "تكرار",
+                                  contentDescription = stringResource(R.string.cd_repeat),
                                   onClick = onToggleRepeat,
                                   tint = if (repeatMode != Player.REPEAT_MODE_OFF) MaterialTheme.colorScheme.secondary else Color.Gray
                               )
@@ -1685,18 +1825,18 @@ jobs:
               val totalSec = (ms / 1000).coerceAtLeast(0)
               val min = totalSec / 60
               val sec = totalSec % 60
-              return "%d:%02d".format(min, sec)
+              return String.format(Locale.US, "%d:%02d", min, sec)
           }
           EOF
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           java-version: '17'
           distribution: 'temurin'
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v5
         with:
           gradle-version: '8.10.2'
 
@@ -1704,7 +1844,7 @@ jobs:
         run: gradle assembleDebug
 
       - name: Upload APK
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: PulsePlayer-Universal-TV-APK
           path: app/build/outputs/apk/debug/app-debug.apk
