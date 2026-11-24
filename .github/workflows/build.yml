@@ -63,8 +63,8 @@ jobs:
                   applicationId = "com.pulse.player"
                   minSdk = 26
                   targetSdk = 35
-                  versionCode = 15
-                  versionName = "2.5.3-TVBgFix"
+                  versionCode = 16
+                  versionName = "2.5.3-KaabaEdition"
               }
 
               buildTypes {
@@ -4533,6 +4533,7 @@ jobs:
                           val center = Offset(cx, h * 0.46f)
                           val voiceEnergy = (mid * 0.65f + overall * 0.35f).coerceIn(0f, 1f)
                           val breathe = 1f + voiceEnergy * 0.09f
+                          val pulseScale = (0.95f + beat * 0.06f).coerceIn(0.9f, 1.1f)
 
                           val haloR = (minDim * 0.46f * breathe).coerceAtLeast(30f)
                           drawCircle(
@@ -4590,85 +4591,143 @@ jobs:
                               drawCircle(AuraPalette.GoldLight.copy(alpha = alpha), radius = r, center = Offset(px, py))
                           }
 
-                          val outerR = (minDim * 0.31f * breathe).coerceAtLeast(28f)
-                          drawCircle(
-                              color = AuraPalette.Gold.copy(alpha = 0.24f + 0.20f * voiceEnergy),
-                              radius = outerR,
-                              center = center,
-                              style = Stroke(width = 2f)
-                          )
-                          drawCircle(
-                              color = AuraPalette.GoldLight.copy(alpha = 0.14f + 0.14f * voiceEnergy),
-                              radius = outerR * 1.07f,
-                              center = center,
-                              style = Stroke(width = 1.2f)
-                          )
+                          val s = (minDim * 0.17f * breathe * pulseScale).coerceAtLeast(30f)
+                          val cyOffset = -s * 0.18f
+                          val base = Offset(cx, center.y + cyOffset)
 
-                          val slowAngle = (phase * 4.2f) % 360f
-                          val dotCount = 16
-                          for (i in 0 until dotCount) {
-                              val rad = ((i * (360f / dotCount) + slowAngle) * PI / 180.0).toFloat()
-                              val dotPos = Offset(center.x + cos(rad) * outerR * 1.035f, center.y + sin(rad) * outerR * 1.035f)
-                              drawCircle(AuraPalette.GoldLight.copy(alpha = 0.45f + 0.45f * voiceEnergy), radius = 2.6f, center = dotPos)
+                          val roofTop = Offset(cx, base.y - s * 1.55f)
+                          val roofLeft = Offset(cx - s * 0.98f, base.y - s * 0.94f)
+                          val roofRight = Offset(cx + s * 0.98f, base.y - s * 0.94f)
+                          val roofCenter = Offset(cx, base.y - s * 0.33f)
+
+                          val botLeft = Offset(cx - s * 0.98f, base.y + s * 0.48f)
+                          val botCenter = Offset(cx, base.y + s * 1.10f)
+                          val botRight = Offset(cx + s * 0.98f, base.y + s * 0.48f)
+
+                          fun getFacePt(u: Float, v: Float, tL: Offset, tR: Offset, bL: Offset, bR: Offset): Offset {
+                              val t = Offset(tL.x + u * (tR.x - tL.x), tL.y + u * (tR.y - tL.y))
+                              val b = Offset(bL.x + u * (bR.x - bL.x), bL.y + u * (bR.y - bL.y))
+                              return Offset(t.x + v * (b.x - t.x), t.y + v * (b.y - t.y))
                           }
 
-                          val sOuter = outerR * 0.68f
-                          for (rot in listOf(slowAngle, slowAngle + 45f)) {
-                              rotate(degrees = rot, pivot = center) {
-                                  drawRect(
-                                      color = AuraPalette.Gold.copy(alpha = 0.06f + 0.08f * voiceEnergy),
-                                      topLeft = Offset(center.x - sOuter, center.y - sOuter),
-                                      size = Size(sOuter * 2f, sOuter * 2f)
-                                  )
-                                  drawRect(
-                                      color = AuraPalette.Gold.copy(alpha = 0.25f + 0.20f * voiceEnergy),
-                                      topLeft = Offset(center.x - sOuter, center.y - sOuter),
-                                      size = Size(sOuter * 2f, sOuter * 2f),
-                                      style = Stroke(width = 6f)
-                                  )
-                                  drawRect(
-                                      color = AuraPalette.GoldLight.copy(alpha = 0.72f + 0.25f * voiceEnergy),
-                                      topLeft = Offset(center.x - sOuter, center.y - sOuter),
-                                      size = Size(sOuter * 2f, sOuter * 2f),
-                                      style = Stroke(width = 2.2f)
-                                  )
-                              }
+                          val botCenterExt = getFacePt(0f, 1.08f, roofCenter, roofRight, botCenter, botRight)
+
+                          val marbleBaseLeft = Path().apply {
+                              moveTo(botLeft.x - 8f, botLeft.y - 2f)
+                              lineTo(botCenter.x, botCenter.y + 12f)
+                              lineTo(botCenterExt.x, botCenterExt.y + 16f)
+                              lineTo(botLeft.x - 12f, botLeft.y + 6f)
+                          }
+                          val marbleBaseRight = Path().apply {
+                              moveTo(botCenter.x, botCenter.y + 12f)
+                              lineTo(botRight.x + 8f, botRight.y - 2f)
+                              lineTo(botRight.x + 12f, botRight.y + 6f)
+                              lineTo(botCenterExt.x, botCenterExt.y + 16f)
+                          }
+                          drawPath(marbleBaseLeft, Color.White.copy(alpha = 0.85f))
+                          drawPath(marbleBaseRight, Color(0xFFE2E8F0).copy(alpha = 0.85f))
+
+                          val roofPath = Path().apply {
+                              moveTo(roofTop.x, roofTop.y)
+                              lineTo(roofLeft.x, roofLeft.y)
+                              lineTo(roofCenter.x, roofCenter.y)
+                              lineTo(roofRight.x, roofRight.y)
+                          }
+                          drawPath(roofPath, Brush.linearGradient(listOf(Color(0xFF1E1E1E), Color(0xFF0F0F0F))))
+
+                          val leftFacePath = Path().apply {
+                              moveTo(roofLeft.x, roofLeft.y)
+                              lineTo(roofCenter.x, roofCenter.y)
+                              lineTo(botCenter.x, botCenter.y)
+                              lineTo(botLeft.x, botLeft.y)
+                          }
+                          drawPath(leftFacePath, Brush.linearGradient(listOf(Color(0xFF131317), Color(0xFF07070B), Color(0xFF031411))))
+
+                          val rightFacePath = Path().apply {
+                              moveTo(roofCenter.x, roofCenter.y)
+                              lineTo(roofRight.x, roofRight.y)
+                              lineTo(botRight.x, botRight.y)
+                              lineTo(botCenter.x, botCenter.y)
+                          }
+                          drawPath(rightFacePath, Brush.linearGradient(listOf(Color(0xFF1B1B1F), Color(0xFF0C0C0E), Color(0xFF030D0A))))
+
+                          val hL1 = getFacePt(0f, 0.10f, roofLeft, roofCenter, botLeft, botCenter)
+                          val hC1 = getFacePt(1f, 0.10f, roofLeft, roofCenter, botLeft, botCenter)
+                          val hC2 = getFacePt(1f, 0.22f, roofLeft, roofCenter, botLeft, botCenter)
+                          val hL2 = getFacePt(0f, 0.22f, roofLeft, roofCenter, botLeft, botCenter)
+                          val leftBand = Path().apply {
+                              moveTo(hL1.x, hL1.y)
+                              lineTo(hC1.x, hC1.y)
+                              lineTo(hC2.x, hC2.y)
+                              lineTo(hL2.x, hL2.y)
+                          }
+                          drawPath(leftBand, AuraPalette.GoldGradient)
+
+                          val hR1 = getFacePt(1f, 0.10f, roofCenter, roofRight, botCenter, botRight)
+                          val hR2 = getFacePt(1f, 0.22f, roofCenter, roofRight, botCenter, botRight)
+                          val rightBand = Path().apply {
+                              moveTo(hC1.x, hC1.y)
+                              lineTo(hR1.x, hR1.y)
+                              lineTo(hR2.x, hR2.y)
+                              lineTo(hC2.x, hC2.y)
+                          }
+                          drawPath(rightBand, AuraPalette.GoldGradient)
+
+                          for (st in 0..14) {
+                              val pL = getFacePt(st.toFloat() / 14f, 0.16f, roofLeft, roofCenter, botLeft, botCenter)
+                              val pR = getFacePt(st.toFloat() / 14f, 0.16f, roofCenter, roofRight, botCenter, botRight)
+                              drawCircle(Color(0xFF451A03).copy(alpha = 0.5f), radius = 1.2f, center = pL)
+                              drawCircle(Color(0xFF451A03).copy(alpha = 0.5f), radius = 1.2f, center = pR)
                           }
 
-                          val sInner = outerR * 0.43f
-                          val reverseAngle = (-phase * 3.0f) % 360f
-                          for (rot in listOf(reverseAngle, reverseAngle + 45f)) {
-                              rotate(degrees = rot, pivot = center) {
-                                  drawRect(
-                                      color = AuraPalette.EmeraldGlow.copy(alpha = 0.12f + 0.10f * voiceEnergy),
-                                      topLeft = Offset(center.x - sInner, center.y - sInner),
-                                      size = Size(sInner * 2f, sInner * 2f)
-                                  )
-                                  drawRect(
-                                      color = AuraPalette.Gold.copy(alpha = 0.60f + 0.30f * voiceEnergy),
-                                      topLeft = Offset(center.x - sInner, center.y - sInner),
-                                      size = Size(sInner * 2f, sInner * 2f),
-                                      style = Stroke(width = 1.8f)
-                                  )
-                              }
+                          val doorTL = getFacePt(0.20f, 0.35f, roofCenter, roofRight, botCenter, botRight)
+                          val doorTR = getFacePt(0.48f, 0.35f, roofCenter, roofRight, botCenter, botRight)
+                          val doorBR = getFacePt(0.48f, 0.88f, roofCenter, roofRight, botCenter, botRight)
+                          val doorBL = getFacePt(0.20f, 0.88f, roofCenter, roofRight, botCenter, botRight)
+                          val doorPath = Path().apply {
+                              moveTo(doorTL.x, doorTL.y)
+                              lineTo(doorTR.x, doorTR.y)
+                              lineTo(doorBR.x, doorBR.y)
+                              lineTo(doorBL.x, doorBL.y)
                           }
+                          drawPath(doorPath, Brush.verticalGradient(listOf(AuraPalette.GoldLight, AuraPalette.Gold, Color(0xFF78350F))))
+                          drawPath(doorPath, AuraPalette.GoldLight, style = Stroke(1.8f))
 
-                          val coreR = (outerR * (0.22f + voiceEnergy * 0.05f)).coerceAtLeast(10f)
+                          val curtainTL = getFacePt(0.18f, 0.25f, roofCenter, roofRight, botCenter, botRight)
+                          val curtainTR = getFacePt(0.50f, 0.25f, roofCenter, roofRight, botCenter, botRight)
+                          val curtainBR = getFacePt(0.50f, 0.35f, roofCenter, roofRight, botCenter, botRight)
+                          val curtainBL = getFacePt(0.18f, 0.35f, roofCenter, roofRight, botCenter, botRight)
+                          val curtainPath = Path().apply {
+                              moveTo(curtainTL.x, curtainTL.y)
+                              lineTo(curtainTR.x, curtainTR.y)
+                              lineTo(curtainBR.x, curtainBR.y)
+                              lineTo(curtainBL.x, curtainBL.y)
+                          }
+                          drawPath(curtainPath, AuraPalette.GoldGradient)
+                          drawPath(curtainPath, Color(0xFFFCD34D), style = Stroke(1f))
+
+                          val blackStoneAnchor = getFacePt(0.96f, 0.94f, roofLeft, roofCenter, botLeft, botCenter)
                           drawCircle(
-                              brush = Brush.radialGradient(
-                                  colors = listOf(AuraPalette.GoldLight, AuraPalette.Gold, Color(0xFF0A4A3B)),
-                                  center = center,
-                                  radius = coreR
-                              ),
-                              radius = coreR,
-                              center = center
+                              brush = Brush.radialGradient(listOf(Color.White, Color(0xFF708090), Color.Transparent)),
+                              radius = s * 0.09f,
+                              center = blackStoneAnchor
                           )
                           drawCircle(
-                              color = AuraPalette.GoldLight.copy(alpha = 0.85f),
-                              radius = coreR * 0.45f,
-                              center = center,
-                              style = Stroke(width = 1.5f)
+                              color = Color(0xFF1A1A1A),
+                              radius = s * 0.04f,
+                              center = blackStoneAnchor
                           )
+
+                          val baseTrimPathLeft = Path().apply {
+                              moveTo(botLeft.x, botLeft.y)
+                              lineTo(botCenter.x, botCenter.y)
+                          }
+                          val baseTrimPathRight = Path().apply {
+                              moveTo(botCenter.x, botCenter.y)
+                              lineTo(botRight.x, botRight.y)
+                          }
+                          drawPath(baseTrimPathLeft, AuraPalette.GoldGradient, style = Stroke(1.5f))
+                          drawPath(baseTrimPathRight, AuraPalette.GoldGradient, style = Stroke(1.5f))
 
                           val baseWaveY = h * 0.88f
                           for (layer in 0..1) {
