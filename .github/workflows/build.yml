@@ -63,8 +63,8 @@ jobs:
                   applicationId = "com.pulse.player"
                   minSdk = 26
                   targetSdk = 35
-                  versionCode = 13
-                  versionName = "2.5.1-FixResume"
+                  versionCode = 15
+                  versionName = "2.5.3-TVBgFix"
               }
 
               buildTypes {
@@ -136,6 +136,8 @@ jobs:
               <string name="tab_homelab">Home Lab (%1$d)</string>
               <string name="search_folders_or_songs">Search folders or tracks...</string>
               <string name="search_in_folder">Search inside %1$s...</string>
+              <string name="search_dialog_title">Search</string>
+              <string name="search_action">Search</string>
               <string name="songs_count">%1$d tracks</string>
               <string name="no_search_results">No matching results found</string>
               <string name="no_local_folders">No visible audio folders found</string>
@@ -217,6 +219,8 @@ jobs:
               <string name="tab_homelab">الهوم لاب (%1$d)</string>
               <string name="search_folders_or_songs">ابحث عن مجلد أو ملف صوتي...</string>
               <string name="search_in_folder">ابحث داخل %1$s...</string>
+              <string name="search_dialog_title">بحث</string>
+              <string name="search_action">بحث</string>
               <string name="songs_count">%1$d ملف</string>
               <string name="no_search_results">لا توجد نتائج مطابقة للبحث</string>
               <string name="no_local_folders">لا توجد مجلدات صوتية ظاهرة</string>
@@ -333,6 +337,7 @@ jobs:
 
               <uses-permission android:name="android.permission.INTERNET" />
               <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+              <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
               <uses-permission android:name="android.permission.WAKE_LOCK" />
               <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
               <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
@@ -364,7 +369,7 @@ jobs:
                   <activity
                       android:name=".MainActivity"
                       android:exported="true"
-                      android:launchMode="singleTop"
+                      android:launchMode="singleTask"
                       android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|navigation">
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
@@ -526,12 +531,10 @@ jobs:
                   val remaining = inputBuffer.remaining()
                   if (remaining == 0) return
 
-                  // تمرير الصوت للمخرج كما هو بدون تعديل
                   val output = replaceOutputBuffer(remaining)
                   output.put(inputBuffer)
                   output.flip()
 
-                  // في الخلفية لا يتم تشغيل أي حسابات FFT لتوفير البطارية
                   if (!AudioSpectrumBus.analysisEnabled) return
 
                   val readBuf = output.duplicate().order(ByteOrder.LITTLE_ENDIAN)
@@ -725,6 +728,7 @@ jobs:
           import androidx.media3.datasource.DataSourceException
           import androidx.media3.datasource.DataSpec
           import androidx.media3.datasource.DefaultDataSource
+          import androidx.media3.datasource.DefaultHttpDataSource
           import androidx.media3.datasource.TransferListener
           import com.hierynomus.msdtyp.AccessMask
           import com.hierynomus.mssmb2.SMB2CreateDisposition
@@ -962,7 +966,11 @@ jobs:
 
           @OptIn(UnstableApi::class)
           class PulseDataSourceFactory(private val context: Context) : DataSource.Factory {
-              private val defaultFactory = DefaultDataSource.Factory(context)
+              private val httpFactory = DefaultHttpDataSource.Factory()
+                  .setConnectTimeoutMs(20_000)
+                  .setReadTimeoutMs(30_000)
+                  .setAllowCrossProtocolRedirects(true)
+              private val defaultFactory = DefaultDataSource.Factory(context, httpFactory)
 
               override fun createDataSource(): DataSource {
                   return RoutingDataSource(
@@ -1017,12 +1025,15 @@ jobs:
           import android.content.Context
           import android.content.Intent
           import android.os.Handler
+          import android.os.Looper
           import androidx.annotation.OptIn
           import androidx.media3.common.AudioAttributes
           import androidx.media3.common.C
           import androidx.media3.common.MediaItem
+          import androidx.media3.common.PlaybackException
           import androidx.media3.common.Player
           import androidx.media3.common.util.UnstableApi
+          import androidx.media3.exoplayer.DefaultLoadControl
           import androidx.media3.exoplayer.DefaultRenderersFactory
           import androidx.media3.exoplayer.ExoPlayer
           import androidx.media3.exoplayer.audio.AudioSink
@@ -1062,7 +1073,6 @@ jobs:
                   }
               }
 
-              // إيقاف/تفعيل تحليل FFT فقط بدون لمس مسار ExoPlayer حتى لا يقفز الصوت للوراء
               fun setVisualizerActive(active: Boolean) {
                   AudioSpectrumBus.analysisEnabled = active
                   if (!active) {
@@ -1109,6 +1119,8 @@ jobs:
 
           class PlaybackService : MediaSessionService() {
               private var mediaSession: MediaSession? = null
+              private val retryHandler = Handler(Looper.getMainLooper())
+              private var consecutiveRetries = 0
 
               @OptIn(UnstableApi::class)
               override fun onCreate() {
@@ -1118,25 +1130,64 @@ jobs:
                       .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
                       .build()
 
+                  val loadControl = DefaultLoadControl.Builder()
+                      .setBufferDurationsMs(
+                          30_000,
+                          120_000,
+                          2_500,
+                          5_000
+                      )
+                      .setBackBuffer(15_000, true)
+                      .build()
+
                   val spectrumProcessor = SpectrumAudioProcessor()
                   val renderersFactory = PulseRenderersFactory(this, spectrumProcessor)
                   val mediaSourceFactory = DefaultMediaSourceFactory(PulseDataSourceFactory(this))
 
                   val player = ExoPlayer.Builder(this, renderersFactory)
                       .setMediaSourceFactory(mediaSourceFactory)
+                      .setLoadControl(loadControl)
                       .setAudioAttributes(audioAttributes, true)
                       .setHandleAudioBecomingNoisy(true)
-                      .setWakeMode(C.WAKE_MODE_LOCAL)
+                      .setWakeMode(C.WAKE_MODE_NETWORK)
                       .build()
 
                   player.addListener(object : Player.Listener {
                       override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
-                          updateWakeModeForItem(player, mediaItem)
+                          consecutiveRetries = 0
+                          retryHandler.removeCallbacksAndMessages(null)
+                      }
+
+                      override fun onPlaybackStateChanged(playbackState: Int) {
+                          if (playbackState == Player.STATE_READY) {
+                              consecutiveRetries = 0
+                          }
+                      }
+
+                      override fun onPlayerError(error: PlaybackException) {
+                          if (consecutiveRetries < 3 && player.mediaItemCount > 0) {
+                              consecutiveRetries++
+                              val resumeIndex = player.currentMediaItemIndex.coerceAtLeast(0)
+                              val resumePos = player.currentPosition.coerceAtLeast(0L)
+                              val shouldPlay = player.playWhenReady
+                              retryHandler.removeCallbacksAndMessages(null)
+                              retryHandler.postDelayed({
+                                  if (mediaSession != null && player.mediaItemCount > 0) {
+                                      player.seekTo(resumeIndex, resumePos)
+                                      player.prepare()
+                                      if (shouldPlay) player.play()
+                                  }
+                              }, 1500L)
+                          }
                       }
                   })
 
                   val openAppIntent = Intent(this, MainActivity::class.java).apply {
-                      flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                      action = Intent.ACTION_MAIN
+                      flags = Intent.FLAG_ACTIVITY_NEW_TASK or
+                          Intent.FLAG_ACTIVITY_SINGLE_TOP or
+                          Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                          Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
                   }
                   val sessionActivityPendingIntent = PendingIntent.getActivity(
                       this,
@@ -1151,13 +1202,8 @@ jobs:
                       .build()
               }
 
-              private fun updateWakeModeForItem(player: ExoPlayer, mediaItem: MediaItem?) {
-                  val scheme = mediaItem?.localConfiguration?.uri?.scheme?.lowercase()
-                  val isNetworkStream = scheme == "http" || scheme == "https" || scheme == SmbHelper.SMB_SCHEME
-                  player.setWakeMode(if (isNetworkStream) C.WAKE_MODE_NETWORK else C.WAKE_MODE_LOCAL)
-              }
-
               fun shutdownService() {
+                  retryHandler.removeCallbacksAndMessages(null)
                   AudioSpectrumBus.clear()
                   runCatching { stopForeground(STOP_FOREGROUND_REMOVE) }
                   stopSelf()
@@ -1168,16 +1214,18 @@ jobs:
               }
 
               override fun onTaskRemoved(rootIntent: Intent?) {
-                  mediaSession?.player?.let { player ->
-                      player.playWhenReady = false
-                      player.pause()
-                      player.stop()
-                      player.clearMediaItems()
+                  val player = mediaSession?.player
+                  val activelyPlaying = player != null &&
+                      player.playWhenReady &&
+                      player.mediaItemCount > 0 &&
+                      player.playbackState != Player.STATE_ENDED
+                  if (!activelyPlaying) {
+                      shutdownService()
                   }
-                  shutdownService()
               }
 
               override fun onDestroy() {
+                  retryHandler.removeCallbacksAndMessages(null)
                   PlaybackBridge.detach()
                   AudioSpectrumBus.clear()
                   mediaSession?.run {
@@ -1548,6 +1596,7 @@ jobs:
           import android.app.Activity
           import android.content.ComponentName
           import android.content.Context
+          import android.content.Intent
           import android.content.pm.PackageManager
           import android.content.res.Configuration
           import android.net.Uri
@@ -1588,6 +1637,8 @@ jobs:
           import androidx.compose.foundation.rememberScrollState
           import androidx.compose.foundation.shape.CircleShape
           import androidx.compose.foundation.shape.RoundedCornerShape
+          import androidx.compose.foundation.text.KeyboardActions
+          import androidx.compose.foundation.text.KeyboardOptions
           import androidx.compose.foundation.verticalScroll
           import androidx.compose.material.icons.Icons
           import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -1621,6 +1672,7 @@ jobs:
           import androidx.compose.ui.platform.LocalLayoutDirection
           import androidx.compose.ui.res.stringResource
           import androidx.compose.ui.text.font.FontWeight
+          import androidx.compose.ui.text.input.ImeAction
           import androidx.compose.ui.text.input.PasswordVisualTransformation
           import androidx.compose.ui.text.style.TextAlign
           import androidx.compose.ui.text.style.TextOverflow
@@ -1720,9 +1772,9 @@ jobs:
               private val playerState = mutableStateOf<Player?>(null)
               private val isResumedState = mutableStateOf(false)
 
-              private fun isTvDevice(): Boolean {
-                  return (resources.configuration.uiMode and Configuration.UI_MODE_TYPE_MASK) ==
-                      Configuration.UI_MODE_TYPE_TELEVISION
+              override fun onNewIntent(intent: Intent) {
+                  super.onNewIntent(intent)
+                  setIntent(intent)
               }
 
               override fun onStart() {
@@ -1751,13 +1803,6 @@ jobs:
                   controllerFuture = null
                   playerState.value = null
                   super.onStop()
-              }
-
-              override fun onDestroy() {
-                  if (isFinishing && isTvDevice()) {
-                      PlaybackBridge.stopPlayback(stopService = true)
-                  }
-                  super.onDestroy()
               }
 
               override fun dispatchKeyEvent(event: KeyEvent): Boolean {
@@ -1852,6 +1897,7 @@ jobs:
               }
 
               var searchQuery by remember { mutableStateOf("") }
+              var showTvSearchDialog by remember { mutableStateOf(false) }
               var isLoadingRemote by remember { mutableStateOf(false) }
               var remoteError by remember { mutableStateOf<String?>(null) }
               var songToManage by remember { mutableStateOf<SongItem?>(null) }
@@ -2239,6 +2285,9 @@ jobs:
                   p.setMediaItems(mediaItems, index.coerceIn(0, mediaItems.lastIndex), 0L)
                   p.prepare()
                   p.play()
+                  if (isTv) {
+                      isFullScreen = true
+                  }
               }
 
               val onPlayPause = {
@@ -2372,6 +2421,8 @@ jobs:
                                       } else {
                                           stringResource(R.string.search_in_folder, currentOpenFolder)
                                       },
+                                      isTv = isTv,
+                                      onOpenTvSearch = { showTvSearchDialog = true },
                                       modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
                                   )
 
@@ -2597,6 +2648,74 @@ jobs:
                           }
                       }
                   }
+              }
+
+              if (showTvSearchDialog) {
+                  var draftQuery by remember(searchQuery) { mutableStateOf(searchQuery) }
+                  val searchFocusRequester = remember { FocusRequester() }
+                  LaunchedEffect(Unit) {
+                      delay(120L)
+                      runCatching { searchFocusRequester.requestFocus() }
+                  }
+                  AlertDialog(
+                      onDismissRequest = { showTvSearchDialog = false },
+                      containerColor = Color(0xFF131326),
+                      title = { Text(stringResource(R.string.search_dialog_title), fontWeight = FontWeight.Bold) },
+                      text = {
+                          OutlinedTextField(
+                              value = draftQuery,
+                              onValueChange = { draftQuery = it },
+                              placeholder = {
+                                  Text(
+                                      if (currentOpenFolder == null) {
+                                          stringResource(R.string.search_folders_or_songs)
+                                      } else {
+                                          stringResource(R.string.search_in_folder, currentOpenFolder)
+                                      },
+                                      color = AuraPalette.MutedText
+                                  )
+                              },
+                              leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = AuraPalette.Cyan) },
+                              singleLine = true,
+                              keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                              keyboardActions = KeyboardActions(
+                                  onSearch = {
+                                      searchQuery = draftQuery.trim()
+                                      showTvSearchDialog = false
+                                  }
+                              ),
+                              colors = OutlinedTextFieldDefaults.colors(
+                                  focusedContainerColor = Color(0x1AFFFFFF),
+                                  unfocusedContainerColor = Color(0x10FFFFFF),
+                                  focusedBorderColor = AuraPalette.Cyan,
+                                  unfocusedBorderColor = AuraPalette.GlassBorder,
+                                  focusedTextColor = Color.White,
+                                  unfocusedTextColor = Color.White,
+                                  cursorColor = AuraPalette.Cyan
+                              ),
+                              modifier = Modifier
+                                  .fillMaxWidth()
+                                  .focusRequester(searchFocusRequester)
+                          )
+                      },
+                      confirmButton = {
+                          Button(onClick = {
+                              searchQuery = draftQuery.trim()
+                              showTvSearchDialog = false
+                          }) { Text(stringResource(R.string.search_action)) }
+                      },
+                      dismissButton = {
+                          Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                              if (draftQuery.isNotEmpty() || searchQuery.isNotEmpty()) {
+                                  TextButton(onClick = {
+                                      searchQuery = ""
+                                      showTvSearchDialog = false
+                                  }) { Text(stringResource(R.string.clear)) }
+                              }
+                              TextButton(onClick = { showTvSearchDialog = false }) { Text(stringResource(R.string.cancel)) }
+                          }
+                      }
+                  )
               }
 
               songToManage?.let { song ->
@@ -3013,33 +3132,82 @@ jobs:
               query: String,
               onQueryChange: (String) -> Unit,
               placeholder: String,
+              isTv: Boolean,
+              onOpenTvSearch: () -> Unit,
               modifier: Modifier = Modifier
           ) {
-              OutlinedTextField(
-                  value = query,
-                  onValueChange = onQueryChange,
-                  placeholder = { Text(placeholder, color = AuraPalette.MutedText, fontSize = 14.sp) },
-                  leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = AuraPalette.Cyan) },
-                  trailingIcon = {
-                      if (query.isNotEmpty()) {
-                          IconButton(onClick = { onQueryChange("") }) {
-                              Icon(Icons.Default.Close, contentDescription = stringResource(R.string.clear), tint = AuraPalette.MutedText)
-                          }
+              if (isTv) {
+                  var isFocused by remember { mutableStateOf(false) }
+                  val shape = RoundedCornerShape(16.dp)
+                  Row(
+                      modifier = modifier.fillMaxWidth(),
+                      verticalAlignment = Alignment.CenterVertically,
+                      horizontalArrangement = Arrangement.spacedBy(8.dp)
+                  ) {
+                      Row(
+                          modifier = Modifier
+                              .weight(1f)
+                              .height(52.dp)
+                              .clip(shape)
+                              .background(if (isFocused) Color(0x26FFFFFF) else Color(0x10FFFFFF))
+                              .border(
+                                  width = if (isFocused) 2.dp else 1.dp,
+                                  color = if (isFocused) AuraPalette.Cyan else AuraPalette.GlassBorder,
+                                  shape = shape
+                              )
+                              .onFocusChanged { isFocused = it.isFocused }
+                              .clickable(onClick = onOpenTvSearch)
+                              .padding(horizontal = 14.dp),
+                          verticalAlignment = Alignment.CenterVertically
+                      ) {
+                          Icon(Icons.Default.Search, contentDescription = null, tint = AuraPalette.Cyan)
+                          Spacer(Modifier.width(12.dp))
+                          Text(
+                              text = query.ifBlank { placeholder },
+                              color = if (query.isBlank()) AuraPalette.MutedText else Color.White,
+                              fontSize = 14.sp,
+                              maxLines = 1,
+                              overflow = TextOverflow.Ellipsis
+                          )
                       }
-                  },
-                  singleLine = true,
-                  shape = RoundedCornerShape(16.dp),
-                  colors = OutlinedTextFieldDefaults.colors(
-                      focusedContainerColor = Color(0x1AFFFFFF),
-                      unfocusedContainerColor = Color(0x10FFFFFF),
-                      focusedBorderColor = AuraPalette.Cyan,
-                      unfocusedBorderColor = AuraPalette.GlassBorder,
-                      focusedTextColor = Color.White,
-                      unfocusedTextColor = Color.White,
-                      cursorColor = AuraPalette.Cyan
-                  ),
-                  modifier = modifier.fillMaxWidth()
-              )
+                      if (query.isNotEmpty()) {
+                          AuraIconButton(
+                              icon = Icons.Default.Close,
+                              contentDescription = stringResource(R.string.clear),
+                              onClick = { onQueryChange("") },
+                              tint = AuraPalette.MutedText,
+                              glass = true,
+                              size = 46
+                          )
+                      }
+                  }
+              } else {
+                  OutlinedTextField(
+                      value = query,
+                      onValueChange = onQueryChange,
+                      placeholder = { Text(placeholder, color = AuraPalette.MutedText, fontSize = 14.sp) },
+                      leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = AuraPalette.Cyan) },
+                      trailingIcon = {
+                          if (query.isNotEmpty()) {
+                              IconButton(onClick = { onQueryChange("") }) {
+                                  Icon(Icons.Default.Close, contentDescription = stringResource(R.string.clear), tint = AuraPalette.MutedText)
+                              }
+                          }
+                      },
+                      singleLine = true,
+                      shape = RoundedCornerShape(16.dp),
+                      colors = OutlinedTextFieldDefaults.colors(
+                          focusedContainerColor = Color(0x1AFFFFFF),
+                          unfocusedContainerColor = Color(0x10FFFFFF),
+                          focusedBorderColor = AuraPalette.Cyan,
+                          unfocusedBorderColor = AuraPalette.GlassBorder,
+                          focusedTextColor = Color.White,
+                          unfocusedTextColor = Color.White,
+                          cursorColor = AuraPalette.Cyan
+                      ),
+                      modifier = modifier.fillMaxWidth()
+                  )
+              }
           }
 
           @Composable
