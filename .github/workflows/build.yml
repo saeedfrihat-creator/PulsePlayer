@@ -102,7 +102,7 @@ jobs:
                   minSdk = 26
                   targetSdk = 35
                   versionCode = 100 + ciRunNumber
-                  versionName = "3.3.$ciRunNumber-KaabaEdition"
+                  versionName = "3.5.$ciRunNumber-KaabaEdition"
               }
 
               signingConfigs {
@@ -338,6 +338,30 @@ jobs:
               <string name="real_album_art_title">Show real album art</string>
               <string name="real_album_art_desc">Uses covers from files and Navidrome when available</string>
 
+              <!-- Separate Quran & Music Sections -->
+              <string name="section_quran">Quran &amp; Dhikr</string>
+              <string name="section_music">Music</string>
+              <string name="headline_quran">Peaceful recitations &amp; remembrance</string>
+              <string name="favorites_quran_folder">Favorite Recitations</string>
+              <string name="favorites_music_folder">Favorite Tracks</string>
+              <string name="search_in_section">Search in %1$s…</string>
+              <string name="section_empty_quran">No Quran or Dhikr folders here yet. You can move any folder from Music.</string>
+              <string name="section_empty_music">No music folders here yet. You can move any folder from Quran &amp; Dhikr.</string>
+              <string name="switch_to_section">Go to %1$s</string>
+              <string name="move_to_quran">Move entire folder to Quran &amp; Dhikr</string>
+              <string name="move_to_music">Move entire folder to Music</string>
+              <string name="move_song_to_quran">Move this track to Quran &amp; Dhikr</string>
+              <string name="move_song_to_music">Move this track to Music</string>
+              <string name="move_folder_to_quran">Move entire folder (%1$s) to Quran &amp; Dhikr</string>
+              <string name="move_folder_to_music">Move entire folder (%1$s) to Music</string>
+              <string name="toast_song_moved_to_quran">Moved track “%1$s” to Quran &amp; Dhikr</string>
+              <string name="toast_song_moved_to_music">Moved track “%1$s” to Music</string>
+              <string name="toast_moved_to_quran">Moved folder “%1$s” to Quran &amp; Dhikr</string>
+              <string name="toast_moved_to_music">Moved folder “%1$s” to Music</string>
+              <string name="mixed_folder_hint">Mixed folder · other tracks are in the other section</string>
+              <string name="reset_categories_btn">Reset manual sections (%1$d)</string>
+              <string name="toast_categories_reset">Automatic sorting restored</string>
+
               <!-- Library scanning -->
               <string name="untitled">Untitled</string>
               <string name="unknown_artist">Unknown artist</string>
@@ -515,6 +539,30 @@ jobs:
               <string name="stop_on_close_desc">يوقف التشغيل فوراً عند الإغلاق من القائمة الأخيرة ويستمر عند الضغط على Home</string>
               <string name="real_album_art_title">عرض صور الألبومات الحقيقية</string>
               <string name="real_album_art_desc">يعرض الغلاف من الملفات وNavidrome عند توفره، وإلا غلاف Pulse التلقائي</string>
+
+              <!-- فصل قسمَي القرآن والأذكار والموسيقى -->
+              <string name="section_quran">القرآن والأذكار</string>
+              <string name="section_music">الموسيقى</string>
+              <string name="headline_quran">تلاوات وأذكار بسكينة</string>
+              <string name="favorites_quran_folder">مفضلة التلاوات</string>
+              <string name="favorites_music_folder">مفضلة الأغاني</string>
+              <string name="search_in_section">ابحث في %1$s…</string>
+              <string name="section_empty_quran">لا توجد مجلدات في القرآن والأذكار بعد. يمكنك نقل أي مجلد من قسم الموسيقى.</string>
+              <string name="section_empty_music">لا توجد مجلدات في الموسيقى بعد. يمكنك نقل أي مجلد من قسم القرآن والأذكار.</string>
+              <string name="switch_to_section">الانتقال إلى %1$s</string>
+              <string name="move_to_quran">نقل المجلد بالكامل إلى القرآن والأذكار</string>
+              <string name="move_to_music">نقل المجلد بالكامل إلى الموسيقى</string>
+              <string name="move_song_to_quran">نقل هذا المقطع فقط إلى القرآن والأذكار</string>
+              <string name="move_song_to_music">نقل هذا المقطع فقط إلى الموسيقى</string>
+              <string name="move_folder_to_quran">نقل مجلد (%1$s) بالكامل إلى القرآن والأذكار</string>
+              <string name="move_folder_to_music">نقل مجلد (%1$s) بالكامل إلى الموسيقى</string>
+              <string name="toast_song_moved_to_quran">تم نقل المقطع «%1$s» إلى القرآن والأذكار</string>
+              <string name="toast_song_moved_to_music">تم نقل المقطع «%1$s» إلى الموسيقى</string>
+              <string name="toast_moved_to_quran">تم نقل مجلد «%1$s» إلى القرآن والأذكار</string>
+              <string name="toast_moved_to_music">تم نقل مجلد «%1$s» إلى الموسيقى</string>
+              <string name="mixed_folder_hint">مجلد مختلط · باقي ملفاته في القسم الآخر</string>
+              <string name="reset_categories_btn">إعادة التصنيف التلقائي (%1$d)</string>
+              <string name="toast_categories_reset">تمت استعادة التصنيف التلقائي</string>
 
               <!-- فحص المكتبة -->
               <string name="untitled">بدون عنوان</string>
@@ -1275,21 +1323,24 @@ jobs:
           object ContentClassifier {
               // Recitation: Quran words and well-known reciters (Arabic + Latin spellings).
               private val quranKeywords = arrayOf(
-                  "قرآن", "قران", "سورة", "سوره", "مصحف", "تلاوة", "تلاوه", "ترتيل", "تجويد",
-                  "رقية", "رقيه",
+                  "قرآن", "قران", "سورة", "سوره", "مصحف", "تلاوة", "تلاوه", "تلاوات", "ترتيل", "تجويد",
+                  "رقية", "رقيه", "آية الكرسي", "اية الكرسي", "المعوذات",
                   "quran", "quraan", "koran", "surah", "sourate", "mushaf", "tilawah", "tilawa", "tarteel", "ruqyah",
                   "العفاسي", "السديس", "المعيقلي", "الحصري", "المنشاوي", "عبدالباسط", "عبد الباسط",
                   "الدوسري", "القطامي", "الغامدي", "العجمي", "الشريم", "الحذيفي", "فارس عباد", "بندر بليلة",
                   "ماهر المعيقلي", "ياسر الدوسري", "سعد الغامدي", "ناصر القطامي", "إسلام صبحي", "اسلام صبحي",
-                  "alafasy", "afasy", "sudais", "muaiqly", "husary", "hussary", "minshawi",
+                  "هزاع البلوشي", "البلوشي", "إدريس أبكر", "ادريس ابكر", "خالد الجليل", "محمد أيوب", "محمد ايوب",
+                  "علي جابر", "الطبلاوي", "اللحيدان", "أحمد العجمي", "احمد العجمي", "توفيق الصايغ", "مشاري راشد",
+                  "alafasy", "al-afasy", "afasy", "mishary", "sudais", "muaiqly", "husary", "hussary", "minshawi",
                   "abdulbasit", "abdul basit", "abdelbasset", "abd al-basit", "dosari", "dossari",
-                  "ghamdi", "shuraim", "qatami", "ajmi", "hudhaify"
+                  "ghamdi", "shuraim", "qatami", "ajmi", "hudhaify", "hazza", "balooshi", "balushi",
+                  "abkar", "tablawi", "luhaydan"
               )
 
               // Supplications and remembrance: Islamic, but not Quran, so they get their own header.
               private val dhikrKeywords = arrayOf(
                   "أذكار", "اذكار", "ذكر الله", "دعاء", "أدعية", "ادعية", "تسبيح", "استغفار", "تهليل",
-                  "ابتهال", "ابتهالات",
+                  "ابتهال", "ابتهالات", "الاذكار", "الأذكار",
                   "adhkar", "azkar", "dhikr", "zikr", "duaa", "du'a", "istighfar"
               )
 
@@ -2399,12 +2450,14 @@ jobs:
           fun folderKeyOf(sourceId: String, folder: String): String = "$sourceId|$folder"
 
           data class FolderGroup(
-              /** Stable key (library + path), also used for hiding. */
+              /** Section-scoped key so mixed folders can appear cleanly in both Quran and Music. */
               val key: String,
               val sourceId: String,
               /** Folder path inside its library. */
               val path: String,
-              val songs: List<SongItem>
+              val songs: List<SongItem>,
+              /** Underlying library+path key shared across sections for hiding or moving the whole folder. */
+              val rawKey: String = key
           ) {
               /** Last path segment, e.g. "Alafasy" for "Music/Quran/Alafasy". */
               val displayName: String
@@ -2929,7 +2982,12 @@ jobs:
           internal const val MODE_REPEAT_ONE = 1
           internal const val MODE_PLAY_ONCE = 2
           internal const val MODE_REPEAT_OFF = 3
-          internal const val FAVORITES_FOLDER_KEY = "__favorites__"
+          internal const val FAVORITES_QURAN_KEY = "__favorites_quran__"
+          internal const val FAVORITES_MUSIC_KEY = "__favorites_music__"
+          internal const val QURAN_KEY_PREFIX = "Q|"
+          internal const val MUSIC_KEY_PREFIX = "M|"
+
+          enum class LibrarySection { QURAN, MUSIC }
 
           data class ResumeSnapshot(
               val songId: String,
@@ -3005,19 +3063,36 @@ jobs:
                   private set
               var sleepTimerRemainingSec by mutableLongStateOf(PlaybackBridge.sleepTimerRemainingSec())
                   private set
+              var activeSection by mutableStateOf(
+                  if (prefs.getString("active_section", "QURAN") == "MUSIC") LibrarySection.MUSIC else LibrarySection.QURAN
+              )
+                  private set
+              private var userExplicitlyChoseSection = prefs.contains("active_section")
+
+              var forcedQuranFolders by mutableStateOf(prefs.getStringSet("forced_quran_folders_v1", emptySet())?.toSet() ?: emptySet())
+                  private set
+              var forcedMusicFolders by mutableStateOf(prefs.getStringSet("forced_music_folders_v1", emptySet())?.toSet() ?: emptySet())
+                  private set
+              var forcedQuranSongs by mutableStateOf(prefs.getStringSet("forced_quran_songs_v1", emptySet())?.toSet() ?: emptySet())
+                  private set
+              var forcedMusicSongs by mutableStateOf(prefs.getStringSet("forced_music_songs_v1", emptySet())?.toSet() ?: emptySet())
+                  private set
               var favoriteSongIds by mutableStateOf(prefs.getStringSet("favorite_songs_v1", emptySet())?.toSet() ?: emptySet())
                   private set
               var hiddenSongIds by mutableStateOf(prefs.getStringSet("hidden_songs_v2", emptySet())?.toSet() ?: emptySet())
                   private set
               var hiddenFolders by mutableStateOf(prefs.getStringSet("hidden_folders_v2", emptySet())?.toSet() ?: emptySet())
                   private set
-              var resumeSnapshot by mutableStateOf<ResumeSnapshot?>(loadResumeSnapshot())
+              var quranResume by mutableStateOf<ResumeSnapshot?>(loadResumeSnapshot("quran"))
+                  private set
+              var musicResume by mutableStateOf<ResumeSnapshot?>(loadResumeSnapshot("music"))
                   private set
               private var lastResumePersistMs = 0L
 
               init {
                   PlaybackBridge.stopOnTaskRemoved = stopOnTaskRemoved
                   PlaybackBridge.setEqPreset(eqPreset)
+                  migrateLegacyResumeIfNeeded()
               }
 
               // ---------------- Player ----------------
@@ -3053,9 +3128,103 @@ jobs:
               val hasActiveTrack: Boolean
                   get() = currentMediaId.isNotEmpty() || isPlaying
 
+              val visibleSongs by derivedStateOf {
+                  songsBySource.values.flatten().filter { it.id !in hiddenSongIds && it.folderKey !in hiddenFolders }
+              }
+
+              val rawFolders by derivedStateOf {
+                  visibleSongs.groupBy { it.folderKey }
+                      .map { (key, list) ->
+                          val first = list.first()
+                          FolderGroup(key, first.sourceId, first.folder, list.sortedBy { it.title.lowercase() })
+                      }
+                      .sortedWith(compareBy<FolderGroup>({ it.displayName.lowercase() }, { it.key.lowercase() }))
+              }
+
+              val quranSongs by derivedStateOf {
+                  visibleSongs.filter { sectionOf(it) == LibrarySection.QURAN }
+              }
+
+              val musicSongs by derivedStateOf {
+                  visibleSongs.filter { sectionOf(it) == LibrarySection.MUSIC }
+              }
+
+              val quranFolders by derivedStateOf {
+                  val real = quranSongs.groupBy { it.folderKey }
+                      .map { (rawKey, list) ->
+                          val first = list.first()
+                          FolderGroup(
+                              key = sectionFolderKey(LibrarySection.QURAN, rawKey),
+                              sourceId = first.sourceId,
+                              path = first.folder,
+                              songs = list.sortedBy { it.title.lowercase() },
+                              rawKey = rawKey
+                          )
+                      }
+                      .sortedWith(compareBy<FolderGroup>({ it.displayName.lowercase() }, { it.rawKey.lowercase() }))
+                  val favs = quranSongs.filter { it.id in favoriteSongIds }.sortedBy { it.title.lowercase() }
+                  if (favs.isNotEmpty()) {
+                      listOf(
+                          FolderGroup(
+                              key = FAVORITES_QURAN_KEY,
+                              sourceId = FAVORITES_QURAN_KEY,
+                              path = appContext.getString(R.string.favorites_quran_folder),
+                              songs = favs,
+                              rawKey = FAVORITES_QURAN_KEY
+                          )
+                      ) + real
+                  } else {
+                      real
+                  }
+              }
+
+              val musicFolders by derivedStateOf {
+                  val real = musicSongs.groupBy { it.folderKey }
+                      .map { (rawKey, list) ->
+                          val first = list.first()
+                          FolderGroup(
+                              key = sectionFolderKey(LibrarySection.MUSIC, rawKey),
+                              sourceId = first.sourceId,
+                              path = first.folder,
+                              songs = list.sortedBy { it.title.lowercase() },
+                              rawKey = rawKey
+                          )
+                      }
+                      .sortedWith(compareBy<FolderGroup>({ it.displayName.lowercase() }, { it.rawKey.lowercase() }))
+                  val favs = musicSongs.filter { it.id in favoriteSongIds }.sortedBy { it.title.lowercase() }
+                  if (favs.isNotEmpty()) {
+                      listOf(
+                          FolderGroup(
+                              key = FAVORITES_MUSIC_KEY,
+                              sourceId = FAVORITES_MUSIC_KEY,
+                              path = appContext.getString(R.string.favorites_music_folder),
+                              songs = favs,
+                              rawKey = FAVORITES_MUSIC_KEY
+                          )
+                      ) + real
+                  } else {
+                      real
+                  }
+              }
+
+              val sectionFolders by derivedStateOf {
+                  if (activeSection == LibrarySection.QURAN) quranFolders else musicFolders
+              }
+
+              val sectionSongs by derivedStateOf {
+                  if (activeSection == LibrarySection.QURAN) quranSongs else musicSongs
+              }
+
+              val folders by derivedStateOf { quranFolders + musicFolders }
+
               val currentKind by derivedStateOf {
+                  val song = if (currentMediaId.isNotBlank()) visibleSongs.firstOrNull { it.id == currentMediaId } else null
+                  if (song != null) return@derivedStateOf kindOf(song)
                   ContentClassifier.classify(currentTitle, currentArtist, currentAlbum)
               }
+
+              val currentSection: LibrarySection
+                  get() = if (currentKind != IslamicKind.NONE) LibrarySection.QURAN else LibrarySection.MUSIC
 
               /** The current track's cover: generated from its folder name, like the folder tile. */
               val currentCover by derivedStateOf {
@@ -3071,10 +3240,6 @@ jobs:
                   }
               }
 
-              val visibleSongs by derivedStateOf {
-                  songsBySource.values.flatten().filter { it.id !in hiddenSongIds && it.folderKey !in hiddenFolders }
-              }
-
               val currentArtKey by derivedStateOf {
                   if (!useRealAlbumArt || currentKind != IslamicKind.NONE || currentMediaId.isBlank()) {
                       null
@@ -3083,32 +3248,18 @@ jobs:
                   }
               }
 
-              val canResume by derivedStateOf {
-                  val snap = resumeSnapshot
-                  !hasActiveTrack && snap != null && visibleSongs.any { it.id == snap.songId }
+              val activeResumeSnapshot: ResumeSnapshot?
+                  get() = if (activeSection == LibrarySection.QURAN) quranResume else musicResume
+
+              val canResumeActiveSection by derivedStateOf {
+                  val snap = activeResumeSnapshot ?: return@derivedStateOf false
+                  val inSection = sectionSongs.any { it.id == snap.songId }
+                  if (!inSection) return@derivedStateOf false
+                  !hasActiveTrack || (currentSection != activeSection && snap.songId != currentMediaId)
               }
 
-              val folders by derivedStateOf {
-                  val grouped = visibleSongs.groupBy { it.folderKey }
-                      .map { (key, list) ->
-                          val first = list.first()
-                          FolderGroup(key, first.sourceId, first.folder, list.sortedBy { it.title.lowercase() })
-                      }
-                      .sortedWith(compareBy<FolderGroup>({ it.displayName.lowercase() }, { it.key.lowercase() }))
-                  val favs = visibleSongs.filter { it.id in favoriteSongIds }.sortedBy { it.title.lowercase() }
-                  if (favs.isNotEmpty()) {
-                      listOf(
-                          FolderGroup(
-                              key = FAVORITES_FOLDER_KEY,
-                              sourceId = FAVORITES_FOLDER_KEY,
-                              path = appContext.getString(R.string.favorites_folder),
-                              songs = favs
-                          )
-                      ) + grouped
-                  } else {
-                      grouped
-                  }
-              }
+              val manualOverrideCount: Int
+                  get() = forcedQuranFolders.size + forcedMusicFolders.size + forcedQuranSongs.size + forcedMusicSongs.size
 
               val isAnyLoading: Boolean
                   get() = loadingSources.isNotEmpty()
@@ -3120,27 +3271,175 @@ jobs:
                   override fun onEvents(player: Player, events: Player.Events) = syncFromPlayer()
               }
 
-              // ================= Folder helpers =================
+              // ================= Sections & Folder helpers =================
+
+              fun isVirtualFolderKey(key: String): Boolean =
+                  key == FAVORITES_QURAN_KEY || key == FAVORITES_MUSIC_KEY
+
+              fun selectSection(section: LibrarySection) {
+                  userExplicitlyChoseSection = true
+                  if (activeSection == section) return
+                  activeSection = section
+                  prefs.edit().putString("active_section", section.name).apply()
+                  if (searchActive) searchQuery = ""
+              }
+
+              fun sectionFolderKey(section: LibrarySection, rawFolderKey: String): String =
+                  (if (section == LibrarySection.QURAN) QURAN_KEY_PREFIX else MUSIC_KEY_PREFIX) + rawFolderKey
+
+              /** On first run with no saved tab, pick Music automatically if only Music tracks exist. */
+              fun autoSelectInitialSectionIfNeeded() {
+                  if (userExplicitlyChoseSection) return
+                  val hasQuran = quranSongs.isNotEmpty()
+                  val hasMusic = musicSongs.isNotEmpty()
+                  if (!hasQuran && hasMusic) {
+                      activeSection = LibrarySection.MUSIC
+                  } else if (hasQuran && !hasMusic) {
+                      activeSection = LibrarySection.QURAN
+                  }
+              }
 
               fun folderByKey(key: String): FolderGroup? = folders.firstOrNull { it.key == key }
 
               fun sourceLabel(sourceId: String): String =
-                  if (sourceId == FAVORITES_FOLDER_KEY) "" else sources.firstOrNull { it.id == sourceId }?.label ?: ""
+                  if (isVirtualFolderKey(sourceId)) "" else sources.firstOrNull { it.id == sourceId }?.label ?: ""
 
-              /** Quran / dhikr / music for a folder, judged from its path and first tracks. */
-              fun kindOf(folder: FolderGroup): IslamicKind {
-                  if (folder.key == FAVORITES_FOLDER_KEY) return IslamicKind.NONE
-                  val memoKey = folder.key + "#" + folder.songs.size
-                  folderKinds[memoKey]?.let { return it }
-                  val sample = folder.songs.take(3).joinToString(" ") { it.title + " " + it.artist }
-                  val kind = ContentClassifier.classify(folder.path, sample)
-                  folderKinds[memoKey] = kind
-                  return kind
+              /**
+               * Per-track classification with clear priority:
+               * 1) Manual per-track move
+               * 2) Manual whole-folder move
+               * 3) Automatic classification using track title, artist, and folder path
+               * This allows mixed folders (like Downloads) to split automatically across Quran & Music.
+               */
+              fun kindOf(song: SongItem): IslamicKind {
+                  if (song.id in forcedMusicSongs) return IslamicKind.NONE
+                  if (song.id in forcedQuranSongs) {
+                      return if (ContentClassifier.classify(song.title, song.artist) == IslamicKind.DHIKR) {
+                          IslamicKind.DHIKR
+                      } else {
+                          IslamicKind.QURAN
+                      }
+                  }
+                  if (song.folderKey in forcedMusicFolders) return IslamicKind.NONE
+                  if (song.folderKey in forcedQuranFolders) {
+                      return if (ContentClassifier.classify(song.folder, song.title, song.artist) == IslamicKind.DHIKR) {
+                          IslamicKind.DHIKR
+                      } else {
+                          IslamicKind.QURAN
+                      }
+                  }
+                  return ContentClassifier.classify(song.title, song.artist, song.folder)
               }
 
-              fun coverOf(folder: FolderGroup): CoverSpec =
-                  if (folder.key == FAVORITES_FOLDER_KEY) CoverArt.forFavorites()
-                  else CoverArt.forName(folder.displayName, kindOf(folder))
+              fun sectionOf(song: SongItem): LibrarySection =
+                  if (kindOf(song) != IslamicKind.NONE) LibrarySection.QURAN else LibrarySection.MUSIC
+
+              fun kindOf(folder: FolderGroup): IslamicKind {
+                  if (folder.key == FAVORITES_QURAN_KEY) return IslamicKind.QURAN
+                  if (folder.key == FAVORITES_MUSIC_KEY) return IslamicKind.NONE
+                  if (folder.key.startsWith(MUSIC_KEY_PREFIX)) return IslamicKind.NONE
+                  if (folder.key.startsWith(QURAN_KEY_PREFIX)) {
+                      val hasQuran = folder.songs.any { kindOf(it) == IslamicKind.QURAN }
+                      return if (hasQuran) IslamicKind.QURAN else IslamicKind.DHIKR
+                  }
+                  return folder.songs.firstOrNull()?.let { kindOf(it) } ?: IslamicKind.NONE
+              }
+
+              fun kindOfResume(snap: ResumeSnapshot): IslamicKind {
+                  visibleSongs.firstOrNull { it.id == snap.songId }?.let { return kindOf(it) }
+                  return ContentClassifier.classify(snap.title, snap.artist, snap.folder)
+              }
+
+              fun isMixedFolder(rawFolderKey: String): Boolean {
+                  if (isVirtualFolderKey(rawFolderKey)) return false
+                  val inQ = quranFolders.any { it.rawKey == rawFolderKey }
+                  val inM = musicFolders.any { it.rawKey == rawFolderKey }
+                  return inQ && inM
+              }
+
+              fun moveSongToSection(song: SongItem, target: LibrarySection) {
+                  val nextQuran: Set<String>
+                  val nextMusic: Set<String>
+                  if (target == LibrarySection.QURAN) {
+                      nextQuran = forcedQuranSongs + song.id
+                      nextMusic = forcedMusicSongs - song.id
+                  } else {
+                      nextMusic = forcedMusicSongs + song.id
+                      nextQuran = forcedQuranSongs - song.id
+                  }
+                  forcedQuranSongs = nextQuran
+                  forcedMusicSongs = nextMusic
+                  prefs.edit()
+                      .putStringSet("forced_quran_songs_v1", HashSet(nextQuran))
+                      .putStringSet("forced_music_songs_v1", HashSet(nextMusic))
+                      .apply()
+                  val msgRes = if (target == LibrarySection.QURAN) R.string.toast_song_moved_to_quran else R.string.toast_song_moved_to_music
+                  appContext.showToast(appContext.getString(msgRes, song.title))
+              }
+
+              fun moveFolderToSection(rawFolderKey: String, target: LibrarySection) {
+                  if (isVirtualFolderKey(rawFolderKey)) return
+                  val songIdsInFolder = visibleSongs.filter { it.folderKey == rawFolderKey }.map { it.id }.toSet()
+                  val displayName = rawFolders.firstOrNull { it.rawKey == rawFolderKey }?.displayName
+                      ?: rawFolderKey.substringAfter('|').substringAfterLast('/')
+                  val nextQuranFolders: Set<String>
+                  val nextMusicFolders: Set<String>
+                  if (target == LibrarySection.QURAN) {
+                      nextQuranFolders = forcedQuranFolders + rawFolderKey
+                      nextMusicFolders = forcedMusicFolders - rawFolderKey
+                  } else {
+                      nextMusicFolders = forcedMusicFolders + rawFolderKey
+                      nextQuranFolders = forcedQuranFolders - rawFolderKey
+                  }
+                  // Clear per-track overrides inside this folder so the entire folder moves cleanly together.
+                  val nextQuranSongs = forcedQuranSongs - songIdsInFolder
+                  val nextMusicSongs = forcedMusicSongs - songIdsInFolder
+
+                  forcedQuranFolders = nextQuranFolders
+                  forcedMusicFolders = nextMusicFolders
+                  forcedQuranSongs = nextQuranSongs
+                  forcedMusicSongs = nextMusicSongs
+                  folderKinds.clear()
+                  prefs.edit()
+                      .putStringSet("forced_quran_folders_v1", HashSet(nextQuranFolders))
+                      .putStringSet("forced_music_folders_v1", HashSet(nextMusicFolders))
+                      .putStringSet("forced_quran_songs_v1", HashSet(nextQuranSongs))
+                      .putStringSet("forced_music_songs_v1", HashSet(nextMusicSongs))
+                      .apply()
+
+                  selectSection(target)
+                  val top = screenStack.lastOrNull() as? Screen.Folder
+                  if (top != null && (
+                          top.key == sectionFolderKey(LibrarySection.QURAN, rawFolderKey) ||
+                              top.key == sectionFolderKey(LibrarySection.MUSIC, rawFolderKey)
+                          )
+                  ) {
+                      screenStack = screenStack.dropLast(1) + Screen.Folder(sectionFolderKey(target, rawFolderKey))
+                  }
+                  val msgRes = if (target == LibrarySection.QURAN) R.string.toast_moved_to_quran else R.string.toast_moved_to_music
+                  appContext.showToast(appContext.getString(msgRes, displayName))
+              }
+
+              fun resetFolderOverrides() {
+                  forcedQuranFolders = emptySet()
+                  forcedMusicFolders = emptySet()
+                  forcedQuranSongs = emptySet()
+                  forcedMusicSongs = emptySet()
+                  folderKinds.clear()
+                  prefs.edit()
+                      .remove("forced_quran_folders_v1")
+                      .remove("forced_music_folders_v1")
+                      .remove("forced_quran_songs_v1")
+                      .remove("forced_music_songs_v1")
+                      .apply()
+                  appContext.showToast(appContext.getString(R.string.toast_categories_reset))
+              }
+
+              fun coverOf(folder: FolderGroup): CoverSpec = when (folder.key) {
+                  FAVORITES_QURAN_KEY -> CoverArt.forFavorites(isSakina = true)
+                  FAVORITES_MUSIC_KEY -> CoverArt.forFavorites(isSakina = false)
+                  else -> CoverArt.forName(folder.displayName, kindOf(folder))
+              }
 
               fun artKeyOf(song: SongItem): String? {
                   if (!useRealAlbumArt) return null
@@ -3152,7 +3451,7 @@ jobs:
               }
 
               fun artKeyOf(folder: FolderGroup): String? {
-                  if (!useRealAlbumArt || folder.key == FAVORITES_FOLDER_KEY || kindOf(folder) != IslamicKind.NONE) {
+                  if (!useRealAlbumArt || isVirtualFolderKey(folder.key) || kindOf(folder) != IslamicKind.NONE) {
                       return null
                   }
                   return folder.songs.firstNotNullOfOrNull { artKeyOf(it) }
@@ -3221,9 +3520,35 @@ jobs:
                   player?.setPlaybackSpeed(next)
               }
 
-              private fun loadResumeSnapshot(): ResumeSnapshot? {
-                  val id = prefs.getString("last_song_id", null)?.takeIf { it.isNotBlank() } ?: return null
+              private fun loadResumeSnapshot(prefix: String): ResumeSnapshot? {
+                  val id = prefs.getString("${prefix}_last_song_id", null)?.takeIf { it.isNotBlank() } ?: return null
                   return ResumeSnapshot(
+                      songId = id,
+                      folderKey = prefs.getString("${prefix}_last_folder_key", "") ?: "",
+                      title = prefs.getString("${prefix}_last_song_title", "") ?: "",
+                      artist = prefs.getString("${prefix}_last_song_artist", "") ?: "",
+                      folder = prefs.getString("${prefix}_last_song_folder", "") ?: "",
+                      positionMs = prefs.getLong("${prefix}_last_position_ms", 0L).coerceAtLeast(0L),
+                      durationMs = prefs.getLong("${prefix}_last_duration_ms", 0L).coerceAtLeast(0L)
+                  )
+              }
+
+              private fun persistResumeSnapshot(prefix: String, snap: ResumeSnapshot) {
+                  prefs.edit()
+                      .putString("${prefix}_last_song_id", snap.songId)
+                      .putString("${prefix}_last_folder_key", snap.folderKey)
+                      .putString("${prefix}_last_song_title", snap.title)
+                      .putString("${prefix}_last_song_artist", snap.artist)
+                      .putString("${prefix}_last_song_folder", snap.folder)
+                      .putLong("${prefix}_last_position_ms", snap.positionMs)
+                      .putLong("${prefix}_last_duration_ms", snap.durationMs)
+                      .apply()
+              }
+
+              private fun migrateLegacyResumeIfNeeded() {
+                  if (quranResume != null || musicResume != null) return
+                  val id = prefs.getString("last_song_id", null)?.takeIf { it.isNotBlank() } ?: return
+                  val snap = ResumeSnapshot(
                       songId = id,
                       folderKey = prefs.getString("last_folder_key", "") ?: "",
                       title = prefs.getString("last_song_title", "") ?: "",
@@ -3232,6 +3557,14 @@ jobs:
                       positionMs = prefs.getLong("last_position_ms", 0L).coerceAtLeast(0L),
                       durationMs = prefs.getLong("last_duration_ms", 0L).coerceAtLeast(0L)
                   )
+                  val isQuran = ContentClassifier.classify(snap.title, snap.artist, snap.folder) != IslamicKind.NONE
+                  if (isQuran) {
+                      quranResume = snap
+                      persistResumeSnapshot("quran", snap)
+                  } else {
+                      musicResume = snap
+                      persistResumeSnapshot("music", snap)
+                  }
               }
 
               fun savePlaybackState(force: Boolean = true) {
@@ -3244,34 +3577,35 @@ jobs:
                   val dur = player?.duration?.coerceAtLeast(0L) ?: durationMs
                   val safePos = if (dur > 10_000L && pos >= dur - 3_000L) 0L else pos
                   val song = visibleSongs.firstOrNull { it.id == id }
+                  val section = if (song != null) sectionOf(song) else currentSection
+                  val existing = if (section == LibrarySection.QURAN) quranResume else musicResume
                   val snap = ResumeSnapshot(
                       songId = id,
-                      folderKey = song?.folderKey ?: (resumeSnapshot?.folderKey ?: ""),
+                      folderKey = song?.folderKey ?: (existing?.folderKey ?: ""),
                       title = currentTitle.ifBlank { song?.title ?: "" },
                       artist = currentArtist.ifBlank { song?.artist ?: "" },
                       folder = currentAlbum.ifBlank { song?.folder ?: "" },
                       positionMs = safePos,
                       durationMs = dur
                   )
-                  resumeSnapshot = snap
-                  prefs.edit()
-                      .putString("last_song_id", snap.songId)
-                      .putString("last_folder_key", snap.folderKey)
-                      .putString("last_song_title", snap.title)
-                      .putString("last_song_artist", snap.artist)
-                      .putString("last_song_folder", snap.folder)
-                      .putLong("last_position_ms", snap.positionMs)
-                      .putLong("last_duration_ms", snap.durationMs)
-                      .apply()
+                  if (section == LibrarySection.QURAN) {
+                      quranResume = snap
+                      persistResumeSnapshot("quran", snap)
+                  } else {
+                      musicResume = snap
+                      persistResumeSnapshot("music", snap)
+                  }
               }
 
-              fun resumeLastPlayback(): Boolean {
-                  val snap = resumeSnapshot ?: return false
-                  val folderSongs = folderByKey(snap.folderKey)?.songs
+              fun resumeSectionPlayback(section: LibrarySection = activeSection): Boolean {
+                  val snap = (if (section == LibrarySection.QURAN) quranResume else musicResume) ?: return false
+                  val secSongs = if (section == LibrarySection.QURAN) quranSongs else musicSongs
+                  val scopedKey = sectionFolderKey(section, snap.folderKey)
+                  val folderSongs = folderByKey(scopedKey)?.songs
                   val list = if (folderSongs != null && folderSongs.any { it.id == snap.songId }) {
                       folderSongs
                   } else {
-                      visibleSongs
+                      secSongs
                   }
                   val index = list.indexOfFirst { it.id == snap.songId }
                   if (index < 0) return false
@@ -3498,9 +3832,15 @@ jobs:
                   if (currentMediaId == songId) player?.pause()
               }
 
-              fun hideFolder(folderKey: String) {
-                  saveHidden(hiddenSongIds, hiddenFolders + folderKey)
-                  if ((screen as? Screen.Folder)?.key == folderKey) back()
+              fun hideFolder(rawFolderKey: String) {
+                  saveHidden(hiddenSongIds, hiddenFolders + rawFolderKey)
+                  val topKey = (screen as? Screen.Folder)?.key
+                  if (topKey == rawFolderKey ||
+                      topKey == sectionFolderKey(LibrarySection.QURAN, rawFolderKey) ||
+                      topKey == sectionFolderKey(LibrarySection.MUSIC, rawFolderKey)
+                  ) {
+                      back()
+                  }
               }
 
               fun restoreHidden() {
@@ -3541,7 +3881,7 @@ jobs:
                   return true
               }
 
-              fun shuffleAll(): Boolean = playList(visibleSongs, 0, shuffle = true)
+              fun shuffleSection(): Boolean = playList(sectionSongs, 0, shuffle = true)
 
               fun playPause() {
                   val p = player ?: return
@@ -3857,7 +4197,9 @@ jobs:
 
                   /** Player mood taken from the track's generated cover. */
                   fun fromCover(cover: CoverSpec): Mood =
-                      if (cover.kind == CoverKind.QURAN || cover.kind == CoverKind.DHIKR) Sakina else Ember.copy(accent = cover.accent)
+                      if (cover.kind == CoverKind.QURAN || cover.kind == CoverKind.DHIKR ||
+                          (cover.kind == CoverKind.FAVORITES && cover.accent == Pal.Gold)
+                      ) Sakina else Ember.copy(accent = cover.accent)
               }
           }
 
@@ -4067,18 +4409,33 @@ jobs:
 
               private val cache = HashMap<String, CoverSpec>()
 
-              fun forFavorites(): CoverSpec = CoverSpec(
-                  kind = CoverKind.FAVORITES,
-                  bg = Color(0xFF281022),
-                  c1 = Color(0xFFFF6B8B),
-                  c2 = Color(0xFFFF9A62),
-                  c3 = Color(0xFFF4F1EA),
-                  accent = Color(0xFFFF7A98),
-                  ax = 34f, ay = 34f, ar = 30f,
-                  bx = 68f, by = 66f, br = 24f,
-                  dx = 50f, dy = 50f, dr = 36f,
-                  lineY = 0f, px = 0f, py = 0f, letter = ""
-              )
+              fun forFavorites(isSakina: Boolean = false): CoverSpec = if (isSakina) {
+                  CoverSpec(
+                      kind = CoverKind.FAVORITES,
+                      bg = Color(0xFF0A2A21),
+                      c1 = Color(0xFF155E4B),
+                      c2 = Pal.Gold,
+                      c3 = Pal.GoldLight,
+                      accent = Pal.Gold,
+                      ax = 34f, ay = 34f, ar = 30f,
+                      bx = 68f, by = 66f, br = 22f,
+                      dx = 50f, dy = 50f, dr = 36f,
+                      lineY = 0f, px = 0f, py = 0f, letter = ""
+                  )
+              } else {
+                  CoverSpec(
+                      kind = CoverKind.FAVORITES,
+                      bg = Color(0xFF281022),
+                      c1 = Color(0xFFFF6B8B),
+                      c2 = Color(0xFFFF9A62),
+                      c3 = Color(0xFFF4F1EA),
+                      accent = Color(0xFFFF7A98),
+                      ax = 34f, ay = 34f, ar = 30f,
+                      bx = 68f, by = 66f, br = 24f,
+                      dx = 50f, dy = 50f, dr = 36f,
+                      lineY = 0f, px = 0f, py = 0f, letter = ""
+                  )
+              }
 
               fun forName(name: String, kind: IslamicKind): CoverSpec {
                   val key = kind.name + "|" + name
@@ -4336,7 +4693,7 @@ jobs:
                           Icon(
                               Icons.Rounded.Favorite,
                               contentDescription = null,
-                              tint = Color(0xFFFFD6E0),
+                              tint = if (spec.accent == Pal.Gold) Pal.GoldLight else Color(0xFFFFD6E0),
                               modifier = Modifier.size(side * 0.36f)
                           )
                       }
@@ -5001,14 +5358,21 @@ jobs:
               options: List<Pair<String, ImageVector>>,
               selected: Int,
               onSelect: (Int) -> Unit,
-              modifier: Modifier = Modifier
+              modifier: Modifier = Modifier,
+              containerColor: Color = Pal.Field,
+              borderColor: Color = Pal.Line,
+              activeBg: Color = Pal.Text,
+              activeContent: Color = Pal.Ink,
+              inactiveContent: Color = Pal.Muted,
+              focusRing: Color = Pal.Ember,
+              height: Dp = 44.dp
           ) {
               Row(
                   modifier = modifier
                       .fillMaxWidth()
                       .clip(RoundedCornerShape(999.dp))
-                      .background(Pal.Field)
-                      .border(1.dp, Pal.Line, RoundedCornerShape(999.dp))
+                      .background(containerColor)
+                      .border(1.dp, borderColor, RoundedCornerShape(999.dp))
                       .padding(4.dp),
                   horizontalArrangement = Arrangement.spacedBy(4.dp)
               ) {
@@ -5018,21 +5382,23 @@ jobs:
                       Row(
                           modifier = Modifier
                               .weight(1f)
-                              .height(44.dp)
-                              .focusGlow(shape, ring = Pal.Ember, scaleTo = 1.03f)
+                              .height(height)
+                              .focusGlow(shape, ring = focusRing, scaleTo = 1.03f)
                               .clip(shape)
-                              .background(if (active) Pal.Text else Color.Transparent)
-                              .clickable(role = Role.Tab) { onSelect(index) },
+                              .background(if (active) activeBg else Color.Transparent)
+                              .clickable(role = Role.Tab) { onSelect(index) }
+                              .padding(horizontal = 10.dp),
                           verticalAlignment = Alignment.CenterVertically,
                           horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)
                       ) {
-                          Icon(icon, contentDescription = null, tint = if (active) Pal.Ink else Pal.Muted, modifier = Modifier.size(18.dp))
+                          Icon(icon, contentDescription = null, tint = if (active) activeContent else inactiveContent, modifier = Modifier.size(18.dp))
                           Text(
                               label,
-                              color = if (active) Pal.Ink else Pal.Muted,
+                              color = if (active) activeContent else inactiveContent,
                               fontSize = 14.sp,
-                              fontWeight = if (active) FontWeight.SemiBold else FontWeight.Medium,
-                              maxLines = 1
+                              fontWeight = if (active) FontWeight.Bold else FontWeight.Medium,
+                              maxLines = 1,
+                              overflow = TextOverflow.Ellipsis
                           )
                       }
                   }
@@ -5072,7 +5438,8 @@ jobs:
               onClick: () -> Unit,
               modifier: Modifier = Modifier,
               titleSize: Int = 15,
-              artKey: String? = null
+              artKey: String? = null,
+              mood: Mood = Mood.Ember
           ) {
               var focused by remember { mutableStateOf(false) }
               val lift by animateFloatAsState(if (focused) 1.07f else 1f, label = "tileLift")
@@ -5094,14 +5461,18 @@ jobs:
                               scaleX = lift
                               scaleY = lift
                           }
-                          .border(if (focused) 3.dp else 0.dp, if (focused) Pal.Text else Color.Transparent, shape)
+                          .border(
+                              if (focused) 3.dp else 0.dp,
+                              if (focused) (if (mood.isSakina) Pal.Gold else Pal.Text) else Color.Transparent,
+                              shape
+                          )
                   )
                   Column(verticalArrangement = Arrangement.spacedBy(3.dp), modifier = Modifier.padding(horizontal = 2.dp)) {
                       Text(
                           folder.displayName,
                           fontSize = titleSize.sp,
                           fontWeight = if (focused) FontWeight.Bold else FontWeight.SemiBold,
-                          color = Pal.Text,
+                          color = if (mood.isSakina) Pal.Mint else Pal.Text,
                           maxLines = 1,
                           overflow = TextOverflow.Ellipsis
                       )
@@ -5109,7 +5480,7 @@ jobs:
                       Text(
                           if (sourceLabel.isNullOrBlank()) count else "$count · $sourceLabel",
                           fontSize = 12.sp,
-                          color = Pal.Muted,
+                          color = mood.muted,
                           maxLines = 1,
                           overflow = TextOverflow.Ellipsis
                       )
@@ -5381,10 +5752,16 @@ jobs:
           }
 
           @Composable
-          fun SectionTitle(text: String, trailing: String? = null, modifier: Modifier = Modifier) {
+          fun SectionTitle(
+              text: String,
+              trailing: String? = null,
+              modifier: Modifier = Modifier,
+              titleColor: Color = Pal.Text,
+              trailingColor: Color = Pal.Muted
+          ) {
               Row(modifier = modifier, verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                  Text(text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = Pal.Text)
-                  if (trailing != null) Text(trailing, fontSize = 13.sp, color = Pal.Muted)
+                  Text(text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = titleColor)
+                  if (trailing != null) Text(trailing, fontSize = 13.sp, color = trailingColor)
               }
           }
           EOF
@@ -5445,6 +5822,11 @@ jobs:
                   while (player != null && vm.isPlaying && isResumed) {
                       vm.pollPosition()
                       delay(1000L)
+                  }
+              }
+              LaunchedEffect(vm.rawFolders.size) {
+                  if (vm.rawFolders.isNotEmpty()) {
+                      vm.autoSelectInitialSectionIfNeeded()
                   }
               }
 
@@ -5594,8 +5976,8 @@ jobs:
                   },
                   manageSong = { songToManage = it },
                   play = { list, index -> play(list, index) },
-                  shuffleAll = { if (vm.shuffleAll() && isTv) vm.isFullScreen = true },
-                  resumeLast = { if (vm.resumeLastPlayback() && isTv) vm.isFullScreen = true },
+                  shuffleAll = { if (vm.shuffleSection() && isTv) vm.isFullScreen = true },
+                  resumeLast = { if (vm.resumeSectionPlayback() && isTv) vm.isFullScreen = true },
                   openStudio = { vm.isFullScreen = true },
                   requestPermission = { requestAudioPermission() },
                   addDevice = { openDevicePicker() },
@@ -5650,7 +6032,10 @@ jobs:
                       placeholder = if (folderName != null) {
                           stringResource(R.string.search_in_folder, folderName)
                       } else {
-                          stringResource(R.string.search_folders_or_songs)
+                          val secLabel = stringResource(
+                              if (vm.activeSection == LibrarySection.QURAN) R.string.section_quran else R.string.section_music
+                          )
+                          stringResource(R.string.search_in_section, secLabel)
                       },
                       onSearch = { query ->
                           if (inFolder) {
@@ -5675,12 +6060,24 @@ jobs:
               }
 
               songToManage?.let { song ->
+                  val inQuran = vm.sectionOf(song) == LibrarySection.QURAN
                   ManageSongDialog(
                       song = song,
                       isFavorite = vm.isFavorite(song.id),
+                      isInQuranSection = inQuran,
                       canDelete = !song.isRemote,
                       onToggleFavorite = {
                           vm.toggleFavorite(song.id)
+                          songToManage = null
+                      },
+                      onMoveSongSection = {
+                          val target = if (inQuran) LibrarySection.MUSIC else LibrarySection.QURAN
+                          vm.moveSongToSection(song, target)
+                          songToManage = null
+                      },
+                      onMoveFolderSection = {
+                          val target = if (inQuran) LibrarySection.MUSIC else LibrarySection.QURAN
+                          vm.moveFolderToSection(song.folderKey, target)
                           songToManage = null
                       },
                       onHideSong = {
@@ -5908,31 +6305,69 @@ jobs:
               }
           }
 
+          // ============================ Section Switcher ============================
+
+          @Composable
+          private fun HomeSectionTabs(vm: PulseViewModel, mood: Mood, isTv: Boolean, modifier: Modifier = Modifier) {
+              val quranLabel = stringResource(R.string.section_quran) + " (${vm.quranFolders.size})"
+              val musicLabel = stringResource(R.string.section_music) + " (${vm.musicFolders.size})"
+              SegmentedTabs(
+                  options = listOf(
+                      quranLabel to Icons.Rounded.MenuBook,
+                      musicLabel to Icons.Rounded.MusicNote
+                  ),
+                  selected = if (vm.activeSection == LibrarySection.QURAN) 0 else 1,
+                  onSelect = { idx ->
+                      vm.selectSection(if (idx == 0) LibrarySection.QURAN else LibrarySection.MUSIC)
+                  },
+                  containerColor = if (mood.isSakina) Color(0xCC0A221B) else Pal.Field,
+                  borderColor = if (mood.isSakina) Pal.Gold.copy(alpha = 0.28f) else Pal.Line,
+                  activeBg = if (mood.isSakina) Pal.Gold else Pal.Ember,
+                  activeContent = if (mood.isSakina) Pal.Night else Pal.Ink,
+                  inactiveContent = mood.muted,
+                  focusRing = if (mood.isSakina) Pal.GoldLight else Pal.Ember,
+                  height = if (isTv) 48.dp else 44.dp,
+                  modifier = modifier
+              )
+          }
+
           // ============================ Phone ============================
 
           @Composable
           private fun PhoneHome(vm: PulseViewModel, actions: HomeActions) {
-              val folders = vm.folders
+              val isQuranTab = vm.activeSection == LibrarySection.QURAN
+              val homeMood = if (isQuranTab) Mood.Sakina else Mood.Ember
+              val folders = vm.sectionFolders
               val multipleSources = vm.sources.size > 1
               Box(
                   modifier = Modifier
                       .fillMaxSize()
-                      .background(Pal.Ink)
+                      .background(homeMood.bg)
               ) {
-                  Box(
-                      modifier = Modifier
-                          .offset(x = (-120).dp, y = (-160).dp)
-                          .size(420.dp)
-                          .background(Brush.radialGradient(listOf(Pal.Ember.copy(alpha = 0.13f), Color.Transparent)), CircleShape)
-                  )
+                  if (isQuranTab) {
+                      Box(
+                          modifier = Modifier
+                              .fillMaxWidth()
+                              .height(420.dp)
+                              .background(Brush.verticalGradient(listOf(Color(0xFF0E3A2E), homeMood.bg)))
+                      )
+                      GirihBackdrop(modifier = Modifier.fillMaxWidth().height(380.dp), alpha = 0.06f)
+                  } else {
+                      Box(
+                          modifier = Modifier
+                              .offset(x = (-120).dp, y = (-160).dp)
+                              .size(420.dp)
+                              .background(Brush.radialGradient(listOf(Pal.Ember.copy(alpha = 0.13f), Color.Transparent)), CircleShape)
+                      )
+                  }
                   Column(
                       modifier = Modifier
                           .fillMaxSize()
                           .statusBarsPadding()
                   ) {
                       if (vm.searchActive) {
-                          SearchHeader(vm)
-                          SearchResults(vm, actions, bottomPad = 120)
+                          SearchHeader(vm, homeMood)
+                          SearchResults(vm, actions, homeMood, bottomPad = 120)
                       } else {
                           Row(
                               modifier = Modifier
@@ -5942,19 +6377,33 @@ jobs:
                               horizontalArrangement = Arrangement.SpaceBetween
                           ) {
                               Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                  PulseLogo()
-                                  Text("Pulse", fontSize = 22.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.4).sp)
+                                  PulseLogo(accent = homeMood.accent)
+                                  Text(
+                                      "Pulse",
+                                      fontSize = 22.sp,
+                                      fontWeight = FontWeight.Bold,
+                                      letterSpacing = (-0.4).sp,
+                                      color = homeMood.text
+                                  )
                               }
                               Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                   RoundIconButton(
                                       icon = Icons.Rounded.Search,
                                       contentDescription = stringResource(R.string.search_action),
-                                      onClick = { vm.searchActive = true }
+                                      onClick = { vm.searchActive = true },
+                                      tint = homeMood.text,
+                                      container = homeMood.surface,
+                                      borderColor = homeMood.line,
+                                      ring = homeMood.accent
                                   )
                                   RoundIconButton(
                                       icon = Icons.Rounded.Tune,
                                       contentDescription = stringResource(R.string.settings),
-                                      onClick = actions.openSettings
+                                      onClick = actions.openSettings,
+                                      tint = homeMood.text,
+                                      container = homeMood.surface,
+                                      borderColor = homeMood.line,
+                                      ring = homeMood.accent
                                   )
                               }
                           }
@@ -5966,11 +6415,11 @@ jobs:
                               verticalArrangement = Arrangement.spacedBy(18.dp)
                           ) {
                               item(span = { GridItemSpan(maxLineSpan) }) {
-                                  HomeIntro(vm, actions, isTv = false)
+                                  HomeIntro(vm, actions, homeMood, isTv = false)
                               }
                               if (folders.isEmpty() && !vm.isAnyLoading) {
                                   item(span = { GridItemSpan(maxLineSpan) }) {
-                                      EmptyLibrary(vm, actions)
+                                      EmptyLibrary(vm, actions, homeMood)
                                   }
                               }
                               items(folders, key = { it.key }) { folder ->
@@ -5979,7 +6428,8 @@ jobs:
                                       cover = vm.coverOf(folder),
                                       artKey = vm.artKeyOf(folder),
                                       sourceLabel = if (multipleSources) vm.sourceLabel(folder.sourceId) else null,
-                                      onClick = { actions.openFolder(folder) }
+                                      onClick = { actions.openFolder(folder) },
+                                      mood = homeMood
                                   )
                               }
                           }
@@ -6017,28 +6467,37 @@ jobs:
               }
           }
 
-          /** Greeting, headline, counts, "shuffle all" and library status, above the folder grid. */
+          /** Greeting, section switcher, counts, "shuffle all", section resume and status banners. */
           @Composable
-          private fun HomeIntro(vm: PulseViewModel, actions: HomeActions, isTv: Boolean) {
+          private fun HomeIntro(vm: PulseViewModel, actions: HomeActions, mood: Mood, isTv: Boolean) {
               val hour = remember { Calendar.getInstance().get(Calendar.HOUR_OF_DAY) }
               val isDay = hour in 4..15
-              Column(verticalArrangement = Arrangement.spacedBy(14.dp), modifier = Modifier.padding(top = if (isTv) 0.dp else 14.dp)) {
+              Column(verticalArrangement = Arrangement.spacedBy(14.dp), modifier = Modifier.padding(top = if (isTv) 0.dp else 10.dp)) {
+                  HomeSectionTabs(vm = vm, mood = mood, isTv = isTv)
                   if (!isTv) {
                       Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                           Text(
                               stringResource(if (isDay) R.string.greeting_day else R.string.greeting_evening),
                               fontSize = 14.sp,
-                              color = Pal.Muted
+                              color = mood.muted
                           )
                           Text(
-                              stringResource(if (isDay) R.string.headline_day else R.string.headline_evening),
-                              fontSize = 30.sp,
+                              stringResource(
+                                  when {
+                                      mood.isSakina -> R.string.headline_quran
+                                      isDay -> R.string.headline_day
+                                      else -> R.string.headline_evening
+                                  }
+                              ),
+                              fontSize = if (mood.isSakina) 32.sp else 30.sp,
+                              fontFamily = if (mood.isSakina) PulseFonts.quran else null,
                               fontWeight = FontWeight.Bold,
-                              lineHeight = 38.sp
+                              color = if (mood.isSakina) Pal.GoldLight else mood.text,
+                              lineHeight = 40.sp
                           )
                       }
                   }
-                  val songCount = vm.visibleSongs.size
+                  val songCount = vm.sectionSongs.size
                   if (songCount > 0) {
                       Row(
                           modifier = Modifier.fillMaxWidth(),
@@ -6046,24 +6505,25 @@ jobs:
                           horizontalArrangement = Arrangement.SpaceBetween
                       ) {
                           Text(
-                              songsCountText(songCount) + " · " + foldersCountText(vm.folders.size),
+                              songsCountText(songCount) + " · " + foldersCountText(vm.sectionFolders.size),
                               fontSize = 13.sp,
-                              color = Pal.Muted
+                              color = mood.muted
                           )
                           PillButton(
                               text = stringResource(R.string.shuffle_all),
                               onClick = actions.shuffleAll,
                               icon = Icons.Rounded.Shuffle,
                               container = Color.Transparent,
-                              content = Pal.Text,
-                              borderColor = Pal.LineStrong,
+                              content = mood.text,
+                              borderColor = mood.line,
                               height = 44.dp,
-                              fontSize = 13
+                              fontSize = 13,
+                              ring = mood.accent
                           )
                       }
                   }
-                  if (!isTv && vm.canResume) {
-                      vm.resumeSnapshot?.let { snap ->
+                  if (!isTv && vm.canResumeActiveSection) {
+                      vm.activeResumeSnapshot?.let { snap ->
                           ContinueListeningCard(vm = vm, snap = snap, onResume = actions.resumeLast)
                       }
                   }
@@ -6073,7 +6533,7 @@ jobs:
 
           @Composable
           private fun ContinueListeningCard(vm: PulseViewModel, snap: ResumeSnapshot, onResume: () -> Unit) {
-              val kind = ContentClassifier.classify(snap.title, snap.artist, snap.folder)
+              val kind = vm.kindOfResume(snap)
               val folderLabel = snap.folder.substringAfterLast('/').ifBlank { snap.folder.ifBlank { "Pulse" } }
               val cover = CoverArt.forName(folderLabel, kind)
               val mood = Mood.fromCover(cover)
@@ -6157,34 +6617,77 @@ jobs:
           }
 
           @Composable
-          private fun EmptyLibrary(vm: PulseViewModel, actions: HomeActions) {
+          private fun EmptyLibrary(vm: PulseViewModel, actions: HomeActions, mood: Mood) {
+              val hasAnySongs = vm.visibleSongs.isNotEmpty()
+              val isQuran = vm.activeSection == LibrarySection.QURAN
+              val otherSection = if (isQuran) LibrarySection.MUSIC else LibrarySection.QURAN
+              val otherLabel = stringResource(if (isQuran) R.string.section_music else R.string.section_quran)
               Column(
                   modifier = Modifier
                       .fillMaxWidth()
-                      .padding(vertical = 48.dp),
+                      .padding(vertical = 44.dp, horizontal = 16.dp),
                   horizontalAlignment = Alignment.CenterHorizontally,
                   verticalArrangement = Arrangement.spacedBy(14.dp)
               ) {
-                  Icon(Icons.Rounded.LibraryMusic, contentDescription = null, tint = Pal.Faint, modifier = Modifier.size(52.dp))
-                  Text(stringResource(R.string.library_empty), color = Pal.Muted, textAlign = TextAlign.Center)
+                  Icon(
+                      if (isQuran) Icons.Rounded.MenuBook else Icons.Rounded.LibraryMusic,
+                      contentDescription = null,
+                      tint = mood.accent.copy(alpha = 0.65f),
+                      modifier = Modifier.size(52.dp)
+                  )
+                  Text(
+                      stringResource(
+                          when {
+                              !hasAnySongs -> R.string.library_empty
+                              isQuran -> R.string.section_empty_quran
+                              else -> R.string.section_empty_music
+                          }
+                      ),
+                      color = mood.muted,
+                      textAlign = TextAlign.Center
+                  )
+                  if (hasAnySongs) {
+                      PillButton(
+                          text = stringResource(R.string.switch_to_section, otherLabel),
+                          onClick = { vm.selectSection(otherSection) },
+                          icon = Icons.Rounded.SwapHoriz,
+                          container = mood.accent,
+                          content = mood.onAccent,
+                          height = 48.dp,
+                          ring = mood.accent
+                      )
+                  }
                   if (vm.hiddenFolders.isNotEmpty() || vm.hiddenSongIds.isNotEmpty()) {
                       PillButton(
                           text = stringResource(R.string.restore_hidden_btn),
                           onClick = { vm.restoreHidden() },
                           container = Color.Transparent,
-                          content = Pal.Text,
-                          borderColor = Pal.LineStrong,
+                          content = mood.text,
+                          borderColor = mood.line,
                           height = 46.dp,
-                          fontSize = 13
+                          fontSize = 13,
+                          ring = mood.accent
                       )
                   }
-                  PillButton(text = stringResource(R.string.add_folder), onClick = actions.openSettings, icon = Icons.Rounded.Add, height = 48.dp)
+                  if (!hasAnySongs) {
+                      PillButton(
+                          text = stringResource(R.string.add_folder),
+                          onClick = actions.openSettings,
+                          icon = Icons.Rounded.Add,
+                          container = mood.accent,
+                          content = mood.onAccent,
+                          height = 48.dp
+                      )
+                  }
               }
           }
 
           @Composable
-          private fun SearchHeader(vm: PulseViewModel) {
+          private fun SearchHeader(vm: PulseViewModel, mood: Mood) {
               val focus = remember { FocusRequester() }
+              val secLabel = stringResource(
+                  if (vm.activeSection == LibrarySection.QURAN) R.string.section_quran else R.string.section_music
+              )
               LaunchedEffect(Unit) {
                   delay(100L)
                   runCatching { focus.requestFocus() }
@@ -6202,17 +6705,21 @@ jobs:
                       onClick = {
                           vm.searchActive = false
                           vm.searchQuery = ""
-                      }
+                      },
+                      tint = mood.text,
+                      container = mood.surface,
+                      borderColor = mood.line,
+                      ring = mood.accent
                   )
                   OutlinedTextField(
                       value = vm.searchQuery,
                       onValueChange = { vm.searchQuery = it },
-                      placeholder = { Text(stringResource(R.string.search_folders_or_songs), color = Pal.Faint, fontSize = 14.sp) },
-                      leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null, tint = Pal.Ember) },
+                      placeholder = { Text(stringResource(R.string.search_in_section, secLabel), color = mood.muted, fontSize = 14.sp) },
+                      leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null, tint = mood.accent) },
                       singleLine = true,
                       shape = RoundedCornerShape(16.dp),
                       keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                      colors = pulseFieldColors(Pal.Ember),
+                      colors = pulseFieldColors(mood.accent),
                       modifier = Modifier
                           .weight(1f)
                           .focusRequester(focus)
@@ -6234,10 +6741,10 @@ jobs:
           )
 
           @Composable
-          private fun SearchResults(vm: PulseViewModel, actions: HomeActions, bottomPad: Int) {
+          private fun SearchResults(vm: PulseViewModel, actions: HomeActions, mood: Mood, bottomPad: Int) {
               val query = vm.searchQuery.trim()
-              val folders = vm.folders
-              val songs = vm.visibleSongs
+              val folders = vm.sectionFolders
+              val songs = vm.sectionSongs
               val matchedFolders = remember(folders, query) {
                   if (query.isBlank()) emptyList() else folders.filter { it.path.contains(query, ignoreCase = true) }.take(12)
               }
@@ -6248,7 +6755,7 @@ jobs:
               }
               if (query.isNotBlank() && matchedFolders.isEmpty() && matchedSongs.isEmpty()) {
                   Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                      Text(stringResource(R.string.no_search_results), color = Pal.Muted)
+                      Text(stringResource(R.string.no_search_results), color = mood.muted)
                   }
                   return
               }
@@ -6262,7 +6769,7 @@ jobs:
                       Row(
                           modifier = Modifier
                               .fillMaxWidth()
-                              .focusGlow(shape, scaleTo = 1.02f)
+                              .focusGlow(shape, ring = mood.accent, scaleTo = 1.02f)
                               .clip(shape)
                               .clickable(role = Role.Button) { actions.openFolder(folder) }
                               .padding(horizontal = 8.dp, vertical = 8.dp),
@@ -6271,8 +6778,8 @@ jobs:
                       ) {
                           GenerativeCover(spec = vm.coverOf(folder), artKey = vm.artKeyOf(folder), modifier = Modifier.size(52.dp), shape = RoundedCornerShape(14.dp))
                           Column(modifier = Modifier.weight(1f)) {
-                              Text(folder.displayName, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                              Text(songsCountText(folder.songs.size), fontSize = 12.sp, color = Pal.Muted)
+                              Text(folder.displayName, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = mood.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                              Text(songsCountText(folder.songs.size), fontSize = 12.sp, color = mood.muted)
                           }
                       }
                   }
@@ -6283,7 +6790,7 @@ jobs:
                           isCurrent = song.id == vm.currentMediaId,
                           isPlaying = vm.isPlaying,
                           clock = vm.clock,
-                          mood = Mood.Ember,
+                          mood = mood,
                           showFolder = true,
                           onClick = { actions.play(matchedSongs, index) },
                           onManage = { actions.manageSong(song) }
@@ -6296,27 +6803,43 @@ jobs:
 
           @Composable
           private fun TvHome(vm: PulseViewModel, actions: HomeActions) {
-              val folders = vm.folders
+              val isQuranTab = vm.activeSection == LibrarySection.QURAN
+              val homeMood = if (isQuranTab) Mood.Sakina else Mood.Ember
+              val folders = vm.sectionFolders
               val multipleSources = vm.sources.size > 1
               val cover = vm.currentCover
-              val heroAccent = if (vm.hasActiveTrack) Mood.fromCover(cover).accent else Pal.Ember
+              val heroAccent = if (vm.hasActiveTrack && vm.currentSection == vm.activeSection) {
+                  Mood.fromCover(cover).accent
+              } else {
+                  homeMood.accent
+              }
               Box(
                   modifier = Modifier
                       .fillMaxSize()
-                      .background(Pal.Ink)
+                      .background(homeMood.bg)
               ) {
-                  Box(
-                      modifier = Modifier
-                          .offset(x = (-160).dp, y = (-260).dp)
-                          .size(900.dp)
-                          .background(Brush.radialGradient(listOf(heroAccent.copy(alpha = 0.18f), Color.Transparent)), CircleShape)
-                  )
+                  if (isQuranTab) {
+                      Box(
+                          modifier = Modifier
+                              .fillMaxWidth()
+                              .height(520.dp)
+                              .background(Brush.verticalGradient(listOf(Color(0xFF0E3A2E), homeMood.bg)))
+                      )
+                      GirihBackdrop(modifier = Modifier.fillMaxSize(), alpha = 0.05f)
+                  } else {
+                      Box(
+                          modifier = Modifier
+                              .offset(x = (-160).dp, y = (-260).dp)
+                              .size(900.dp)
+                              .background(Brush.radialGradient(listOf(heroAccent.copy(alpha = 0.18f), Color.Transparent)), CircleShape)
+                      )
+                  }
                   LazyVerticalGrid(
                       columns = GridCells.Adaptive(minSize = 176.dp),
                       modifier = Modifier.fillMaxSize(),
-                      contentPadding = PaddingValues(start = 56.dp, end = 56.dp, top = 32.dp, bottom = 40.dp),
+                      contentPadding = PaddingValues(start = 56.dp, end = 56.dp, top = 28.dp, bottom = 40.dp),
                       horizontalArrangement = Arrangement.spacedBy(28.dp),
-                      verticalArrangement = Arrangement.spacedBy(26.dp)
+                      verticalArrangement = Arrangement.spacedBy(24.dp)
                   ) {
                       item(span = { GridItemSpan(maxLineSpan) }) {
                           Row(
@@ -6325,23 +6848,49 @@ jobs:
                               horizontalArrangement = Arrangement.SpaceBetween
                           ) {
                               Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                  PulseLogo(size = 36.dp)
-                                  Text("Pulse", fontSize = 26.sp, fontWeight = FontWeight.Bold)
+                                  PulseLogo(size = 36.dp, accent = homeMood.accent)
+                                  Text("Pulse", fontSize = 26.sp, fontWeight = FontWeight.Bold, color = homeMood.text)
                               }
+                              HomeSectionTabs(
+                                  vm = vm,
+                                  mood = homeMood,
+                                  isTv = true,
+                                  modifier = Modifier.width(460.dp)
+                              )
                               Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                  RoundIconButton(Icons.Rounded.Search, stringResource(R.string.search_action), actions.openTvSearch, size = 52.dp, iconSize = 22.dp)
-                                  RoundIconButton(Icons.Rounded.Refresh, stringResource(R.string.refresh), { vm.refreshAll() }, size = 52.dp, iconSize = 22.dp)
-                                  RoundIconButton(Icons.Rounded.Tune, stringResource(R.string.settings), actions.openSettings, size = 52.dp, iconSize = 22.dp)
+                                  RoundIconButton(
+                                      Icons.Rounded.Search, stringResource(R.string.search_action), actions.openTvSearch,
+                                      size = 52.dp, iconSize = 22.dp, tint = homeMood.text, container = homeMood.surface, borderColor = homeMood.line, ring = homeMood.accent
+                                  )
+                                  RoundIconButton(
+                                      Icons.Rounded.Refresh, stringResource(R.string.refresh), { vm.refreshAll() },
+                                      size = 52.dp, iconSize = 22.dp, tint = homeMood.text, container = homeMood.surface, borderColor = homeMood.line, ring = homeMood.accent
+                                  )
+                                  RoundIconButton(
+                                      Icons.Rounded.Tune, stringResource(R.string.settings), actions.openSettings,
+                                      size = 52.dp, iconSize = 22.dp, tint = homeMood.text, container = homeMood.surface, borderColor = homeMood.line, ring = homeMood.accent
+                                  )
                               }
                           }
                       }
                       item(span = { GridItemSpan(maxLineSpan) }) {
                           when {
-                              vm.hasActiveTrack -> TvNowPlayingHero(vm, actions)
-                              vm.canResume && vm.resumeSnapshot != null -> TvResumeHero(vm, vm.resumeSnapshot!!, actions.resumeLast)
-                              else -> Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(vertical = 8.dp)) {
-                                  Text(stringResource(R.string.headline_evening), fontSize = 40.sp, fontWeight = FontWeight.Bold)
-                                  Text(stringResource(R.string.select_song_prompt), fontSize = 18.sp, color = Pal.Muted)
+                              vm.hasActiveTrack -> Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
+                                  TvNowPlayingHero(vm, actions)
+                                  if (vm.canResumeActiveSection && vm.activeResumeSnapshot != null) {
+                                      ContinueListeningCard(vm = vm, snap = vm.activeResumeSnapshot!!, onResume = actions.resumeLast)
+                                  }
+                              }
+                              vm.canResumeActiveSection && vm.activeResumeSnapshot != null -> TvResumeHero(vm, vm.activeResumeSnapshot!!, actions.resumeLast)
+                              else -> Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(vertical = 6.dp)) {
+                                  Text(
+                                      stringResource(if (isQuranTab) R.string.headline_quran else R.string.headline_evening),
+                                      fontSize = 40.sp,
+                                      fontFamily = if (isQuranTab) PulseFonts.quran else null,
+                                      color = if (isQuranTab) Pal.GoldLight else homeMood.text,
+                                      fontWeight = FontWeight.Bold
+                                  )
+                                  Text(stringResource(R.string.select_song_prompt), fontSize = 18.sp, color = homeMood.muted)
                               }
                           }
                       }
@@ -6349,24 +6898,30 @@ jobs:
                           Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
                               LibraryBanners(vm, actions)
                               Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-                                  SectionTitle(stringResource(R.string.your_folders), foldersCountText(folders.size))
-                                  if (vm.visibleSongs.isNotEmpty()) {
+                                  SectionTitle(
+                                      text = stringResource(if (isQuranTab) R.string.section_quran else R.string.section_music),
+                                      trailing = foldersCountText(folders.size),
+                                      titleColor = if (isQuranTab) Pal.GoldLight else homeMood.text,
+                                      trailingColor = homeMood.muted
+                                  )
+                                  if (vm.sectionSongs.isNotEmpty()) {
                                       PillButton(
                                           text = stringResource(R.string.shuffle_all),
                                           onClick = actions.shuffleAll,
                                           icon = Icons.Rounded.Shuffle,
-                                          container = Pal.Surface,
-                                          content = Pal.Text,
-                                          borderColor = Pal.Line,
+                                          container = homeMood.surface,
+                                          content = homeMood.text,
+                                          borderColor = homeMood.line,
                                           height = 48.dp,
-                                          fontSize = 14
+                                          fontSize = 14,
+                                          ring = homeMood.accent
                                       )
                                   }
                               }
                           }
                       }
                       if (folders.isEmpty() && !vm.isAnyLoading) {
-                          item(span = { GridItemSpan(maxLineSpan) }) { EmptyLibrary(vm, actions) }
+                          item(span = { GridItemSpan(maxLineSpan) }) { EmptyLibrary(vm, actions, homeMood) }
                       }
                       items(folders, key = { it.key }) { folder ->
                           FolderTile(
@@ -6375,7 +6930,8 @@ jobs:
                               artKey = vm.artKeyOf(folder),
                               sourceLabel = if (multipleSources) vm.sourceLabel(folder.sourceId) else null,
                               onClick = { actions.openFolder(folder) },
-                              titleSize = 16
+                              titleSize = 16,
+                              mood = homeMood
                           )
                       }
                   }
@@ -6447,7 +7003,7 @@ jobs:
 
           @Composable
           private fun TvResumeHero(vm: PulseViewModel, snap: ResumeSnapshot, onResume: () -> Unit) {
-              val kind = ContentClassifier.classify(snap.title, snap.artist, snap.folder)
+              val kind = vm.kindOfResume(snap)
               val folderLabel = snap.folder.substringAfterLast('/').ifBlank { snap.folder.ifBlank { "Pulse" } }
               val cover = CoverArt.forName(folderLabel, kind)
               val mood = Mood.fromCover(cover)
@@ -6492,10 +7048,11 @@ jobs:
 
           @Composable
           private fun TvSearchScreen(vm: PulseViewModel, actions: HomeActions) {
+              val mood = if (vm.activeSection == LibrarySection.QURAN) Mood.Sakina else Mood.Ember
               Column(
                   modifier = Modifier
                       .fillMaxSize()
-                      .background(Pal.Ink)
+                      .background(mood.bg)
                       .padding(horizontal = 44.dp, vertical = 28.dp)
               ) {
                   Row(
@@ -6510,12 +7067,17 @@ jobs:
                               vm.searchActive = false
                               vm.searchQuery = ""
                           },
-                          size = 52.dp
+                          size = 52.dp,
+                          tint = mood.text,
+                          container = mood.surface,
+                          borderColor = mood.line,
+                          ring = mood.accent
                       )
                       Text(
                           stringResource(R.string.search_results_for, vm.searchQuery),
                           fontSize = 26.sp,
                           fontWeight = FontWeight.Bold,
+                          color = mood.text,
                           maxLines = 1,
                           overflow = TextOverflow.Ellipsis,
                           modifier = Modifier.weight(1f)
@@ -6524,13 +7086,14 @@ jobs:
                           text = stringResource(R.string.search_action),
                           onClick = actions.openTvSearch,
                           icon = Icons.Rounded.Search,
-                          container = Pal.Surface,
-                          content = Pal.Text,
-                          borderColor = Pal.Line,
-                          height = 52.dp
+                          container = mood.surface,
+                          content = mood.text,
+                          borderColor = mood.line,
+                          height = 52.dp,
+                          ring = mood.accent
                       )
                   }
-                  SearchResults(vm, actions, bottomPad = 24)
+                  SearchResults(vm, actions, mood, bottomPad = 24)
               }
           }
           EOF
@@ -6618,6 +7181,8 @@ jobs:
                   }
 
                   val folderArtKey = vm.artKeyOf(folder)
+                  val canMoveFolder = !vm.isVirtualFolderKey(folder.key)
+                  val isMixed = vm.isMixedFolder(folder.rawKey)
                   val header: @Composable () -> Unit = {
                       FolderHero(
                           folder = folder,
@@ -6626,8 +7191,14 @@ jobs:
                           mood = mood,
                           meta = meta,
                           isTv = isTv,
+                          canMove = canMoveFolder,
+                          isMixed = isMixed,
                           onPlayAll = { onPlay(folder.songs, 0, false) },
-                          onShuffle = { onPlay(folder.songs, 0, true) }
+                          onShuffle = { onPlay(folder.songs, 0, true) },
+                          onMoveSection = {
+                              val target = if (mood.isSakina) LibrarySection.MUSIC else LibrarySection.QURAN
+                              vm.moveFolderToSection(folder.rawKey, target)
+                          }
                       )
                   }
 
@@ -6701,8 +7272,14 @@ jobs:
                               borderColor = mood.line,
                               ring = mood.accent
                           )
+                          val topLabel = when {
+                              folder.key == FAVORITES_QURAN_KEY -> stringResource(R.string.section_quran)
+                              folder.key == FAVORITES_MUSIC_KEY -> stringResource(R.string.section_music)
+                              mood.isSakina -> stringResource(if (kind == IslamicKind.DHIKR) R.string.dhikr_header else R.string.quran_header)
+                              else -> sourceLabel.ifBlank { stringResource(R.string.section_music) }
+                          }
                           Text(
-                              if (mood.isSakina) stringResource(R.string.quran_header) else sourceLabel,
+                              topLabel,
                               fontSize = 13.sp,
                               color = mood.muted,
                               fontFamily = if (mood.isSakina) PulseFonts.quran else null
@@ -6768,8 +7345,11 @@ jobs:
               mood: Mood,
               meta: String,
               isTv: Boolean,
+              canMove: Boolean,
+              isMixed: Boolean,
               onPlayAll: () -> Unit,
-              onShuffle: () -> Unit
+              onShuffle: () -> Unit,
+              onMoveSection: () -> Unit
           ) {
               Column(
                   modifier = Modifier
@@ -6791,7 +7371,8 @@ jobs:
                       folder.displayName,
                       fontSize = if (isTv) 32.sp else 28.sp,
                       fontWeight = FontWeight.Bold,
-                      color = mood.text,
+                      fontFamily = if (mood.isSakina) PulseFonts.quran else null,
+                      color = if (mood.isSakina) Pal.GoldLight else mood.text,
                       textAlign = TextAlign.Center,
                       maxLines = 2,
                       overflow = TextOverflow.Ellipsis,
@@ -6806,6 +7387,16 @@ jobs:
                       maxLines = 2,
                       modifier = Modifier.padding(horizontal = 12.dp)
                   )
+                  if (isMixed) {
+                      Spacer(Modifier.height(6.dp))
+                      Text(
+                          stringResource(R.string.mixed_folder_hint),
+                          fontSize = 12.sp,
+                          color = mood.accent,
+                          textAlign = TextAlign.Center,
+                          modifier = Modifier.padding(horizontal = 14.dp)
+                      )
+                  }
                   Spacer(Modifier.height(18.dp))
                   Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                       PillButton(
@@ -6823,6 +7414,20 @@ jobs:
                           tint = mood.accent,
                           container = Color.Transparent,
                           borderColor = mood.accent.copy(alpha = 0.4f),
+                          ring = mood.accent
+                      )
+                  }
+                  if (canMove) {
+                      Spacer(Modifier.height(12.dp))
+                      PillButton(
+                          text = stringResource(if (mood.isSakina) R.string.move_to_music else R.string.move_to_quran),
+                          onClick = onMoveSection,
+                          icon = Icons.Rounded.SwapHoriz,
+                          container = mood.text.copy(alpha = 0.06f),
+                          content = if (mood.isSakina) Pal.Mint else Pal.GoldLight,
+                          borderColor = mood.line,
+                          height = 42.dp,
+                          fontSize = 13,
                           ring = mood.accent
                       )
                   }
@@ -7687,7 +8292,7 @@ jobs:
                           Text(stringResource(R.string.no_libraries_yet), color = Pal.Muted, fontSize = 14.sp)
                       }
                       vm.sources.forEach { source ->
-                          val folderCount = vm.folders.count { it.sourceId == source.id }
+                          val folderCount = vm.rawFolders.count { it.sourceId == source.id }
                           LibraryRow(
                               source = source,
                               folderCount = folderCount,
@@ -7775,6 +8380,19 @@ jobs:
                               Text(eqLabel, fontSize = 12.sp, color = Pal.Muted)
                           }
                           Icon(Icons.Rounded.ChevronRight, contentDescription = null, tint = Pal.Muted)
+                      }
+
+                      if (vm.manualOverrideCount > 0) {
+                          PillButton(
+                              text = stringResource(R.string.reset_categories_btn, vm.manualOverrideCount),
+                              onClick = { vm.resetFolderOverrides() },
+                              icon = Icons.Rounded.SwapHoriz,
+                              container = Color.Transparent,
+                              content = Pal.Text,
+                              borderColor = Pal.LineStrong,
+                              height = 48.dp,
+                              fontSize = 14
+                          )
                       }
 
                       if (vm.hiddenFolders.isNotEmpty() || vm.hiddenSongIds.isNotEmpty()) {
@@ -8238,7 +8856,9 @@ jobs:
           import androidx.compose.foundation.border
           import androidx.compose.foundation.clickable
           import androidx.compose.foundation.layout.*
+          import androidx.compose.foundation.rememberScrollState
           import androidx.compose.foundation.shape.RoundedCornerShape
+          import androidx.compose.foundation.verticalScroll
           import androidx.compose.foundation.text.KeyboardActions
           import androidx.compose.foundation.text.KeyboardOptions
           import androidx.compose.material.icons.Icons
@@ -8315,8 +8935,11 @@ jobs:
           fun ManageSongDialog(
               song: SongItem,
               isFavorite: Boolean,
+              isInQuranSection: Boolean,
               canDelete: Boolean,
               onToggleFavorite: () -> Unit,
+              onMoveSongSection: () -> Unit,
+              onMoveFolderSection: () -> Unit,
               onHideSong: () -> Unit,
               onHideFolder: () -> Unit,
               onDelete: () -> Unit,
@@ -8328,8 +8951,11 @@ jobs:
                   containerColor = Pal.Sheet,
                   title = { Text(stringResource(R.string.manage_audio_title), fontWeight = FontWeight.Bold) },
                   text = {
-                      Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                          Text(song.title, color = Pal.Ember, fontWeight = FontWeight.SemiBold)
+                      Column(
+                          modifier = Modifier.verticalScroll(rememberScrollState()),
+                          verticalArrangement = Arrangement.spacedBy(10.dp)
+                      ) {
+                          Text(song.title, color = if (isInQuranSection) Pal.GoldLight else Pal.Ember, fontWeight = FontWeight.SemiBold)
                           Text(stringResource(R.string.folder_label, song.folder), fontSize = 12.sp, color = Pal.Muted)
                           Spacer(Modifier.height(4.dp))
                           OutlinedButton(onClick = onToggleFavorite, modifier = Modifier.fillMaxWidth()) {
@@ -8341,6 +8967,40 @@ jobs:
                               )
                               Spacer(Modifier.width(8.dp))
                               Text(stringResource(if (isFavorite) R.string.remove_from_favorites else R.string.add_to_favorites))
+                          }
+                          Button(
+                              onClick = onMoveSongSection,
+                              colors = ButtonDefaults.buttonColors(
+                                  containerColor = if (isInQuranSection) Pal.Ember else Pal.Gold,
+                                  contentColor = Pal.Ink
+                              ),
+                              modifier = Modifier.fillMaxWidth()
+                          ) {
+                              Icon(
+                                  if (isInQuranSection) Icons.Rounded.MusicNote else Icons.Rounded.MenuBook,
+                                  contentDescription = null,
+                                  modifier = Modifier.size(18.dp)
+                              )
+                              Spacer(Modifier.width(8.dp))
+                              Text(
+                                  stringResource(if (isInQuranSection) R.string.move_song_to_music else R.string.move_song_to_quran),
+                                  fontWeight = FontWeight.Bold
+                              )
+                          }
+                          OutlinedButton(onClick = onMoveFolderSection, modifier = Modifier.fillMaxWidth()) {
+                              Icon(
+                                  Icons.Rounded.SwapHoriz,
+                                  contentDescription = null,
+                                  tint = if (isInQuranSection) Pal.Ember else Pal.Gold,
+                                  modifier = Modifier.size(18.dp)
+                              )
+                              Spacer(Modifier.width(8.dp))
+                              Text(
+                                  stringResource(
+                                      if (isInQuranSection) R.string.move_folder_to_music else R.string.move_folder_to_quran,
+                                      folderDisplay
+                                  )
+                              )
                           }
                           OutlinedButton(onClick = onHideSong, modifier = Modifier.fillMaxWidth()) {
                               Icon(Icons.Rounded.VisibilityOff, contentDescription = null, modifier = Modifier.size(18.dp))
@@ -8533,10 +9193,10 @@ jobs:
           mkdir -p dist
           if [ "$BUILD_MODE" = "release" ]; then
             gradle assembleRelease
-            cp app/build/outputs/apk/release/app-release.apk "dist/PulsePlayer-v3.3.${GITHUB_RUN_NUMBER}.apk"
+            cp app/build/outputs/apk/release/app-release.apk "dist/PulsePlayer-v3.5.${GITHUB_RUN_NUMBER}.apk"
           else
             gradle assembleDebug
-            cp app/build/outputs/apk/debug/app-debug.apk "dist/PulsePlayer-v3.3.${GITHUB_RUN_NUMBER}-debug-UNSIGNED-KEY.apk"
+            cp app/build/outputs/apk/debug/app-debug.apk "dist/PulsePlayer-v3.5.${GITHUB_RUN_NUMBER}-debug-UNSIGNED-KEY.apk"
           fi
 
       - name: Remove signing key from runner
