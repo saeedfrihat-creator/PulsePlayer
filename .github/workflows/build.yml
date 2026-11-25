@@ -102,7 +102,7 @@ jobs:
                   minSdk = 26
                   targetSdk = 35
                   versionCode = 100 + ciRunNumber
-                  versionName = "3.6.$ciRunNumber-KaabaEdition"
+                  versionName = "3.7.$ciRunNumber-KaabaEdition"
               }
 
               signingConfigs {
@@ -362,6 +362,18 @@ jobs:
               <string name="reset_categories_btn">Reset manual sections (%1$d)</string>
               <string name="toast_categories_reset">Automatic sorting restored</string>
 
+              <!-- Action menu labels -->
+              <string name="action_move_to_quran">Move to Quran &amp; Dhikr</string>
+              <string name="action_move_to_music">Move to Music</string>
+              <string name="action_this_track_only">This track only</string>
+              <string name="action_move_entire_folder">Move entire folder</string>
+              <string name="action_folder_to_section">%1$s → %2$s</string>
+              <string name="action_hide_track">Hide this track</string>
+              <string name="action_from_pulse_only">From Pulse only</string>
+              <string name="action_hide_folder">Hide entire folder</string>
+              <string name="action_delete_track">Delete from device</string>
+              <string name="action_delete_desc">Permanently removes the audio file</string>
+
               <!-- Library scanning -->
               <string name="untitled">Untitled</string>
               <string name="unknown_artist">Unknown artist</string>
@@ -563,6 +575,18 @@ jobs:
               <string name="mixed_folder_hint">مجلد مختلط · باقي ملفاته في القسم الآخر</string>
               <string name="reset_categories_btn">إعادة التصنيف التلقائي (%1$d)</string>
               <string name="toast_categories_reset">تمت استعادة التصنيف التلقائي</string>
+
+              <!-- نصوص قائمة خيارات المقطع -->
+              <string name="action_move_to_quran">نقل إلى القرآن والأذكار</string>
+              <string name="action_move_to_music">نقل إلى الموسيقى</string>
+              <string name="action_this_track_only">هذا المقطع فقط</string>
+              <string name="action_move_entire_folder">نقل المجلد بالكامل</string>
+              <string name="action_folder_to_section">%1$s ← %2$s</string>
+              <string name="action_hide_track">إخفاء هذا المقطع</string>
+              <string name="action_from_pulse_only">من التطبيق فقط</string>
+              <string name="action_hide_folder">إخفاء المجلد بالكامل</string>
+              <string name="action_delete_track">حذف الملف من الجهاز</string>
+              <string name="action_delete_desc">يحذف الملف نهائياً من التخزين</string>
 
               <!-- فحص المكتبة -->
               <string name="untitled">بدون عنوان</string>
@@ -6138,9 +6162,15 @@ jobs:
               }
 
               songToManage?.let { song ->
-                  val inQuran = vm.sectionOf(song) == LibrarySection.QURAN
+                  val songKind = vm.kindOf(song)
+                  val inQuran = songKind != IslamicKind.NONE
+                  val folderLabel = song.folder.substringAfterLast('/').ifBlank { song.folder.ifBlank { "Pulse" } }
+                  val cover = CoverArt.forName(folderLabel, songKind)
+                  val artKey = if (!inQuran) vm.artKeyOf(song) else null
                   ManageSongDialog(
                       song = song,
+                      cover = cover,
+                      artKey = artKey,
                       isFavorite = vm.isFavorite(song.id),
                       isInQuranSection = inQuran,
                       canDelete = !song.isRemote,
@@ -9331,9 +9361,9 @@ jobs:
           import androidx.compose.foundation.layout.*
           import androidx.compose.foundation.rememberScrollState
           import androidx.compose.foundation.shape.RoundedCornerShape
-          import androidx.compose.foundation.verticalScroll
           import androidx.compose.foundation.text.KeyboardActions
           import androidx.compose.foundation.text.KeyboardOptions
+          import androidx.compose.foundation.verticalScroll
           import androidx.compose.material.icons.Icons
           import androidx.compose.material.icons.rounded.*
           import androidx.compose.material3.*
@@ -9343,13 +9373,18 @@ jobs:
           import androidx.compose.ui.draw.clip
           import androidx.compose.ui.focus.FocusRequester
           import androidx.compose.ui.focus.focusRequester
+          import androidx.compose.ui.graphics.Brush
           import androidx.compose.ui.graphics.Color
+          import androidx.compose.ui.graphics.vector.ImageVector
           import androidx.compose.ui.res.stringResource
           import androidx.compose.ui.semantics.Role
           import androidx.compose.ui.text.font.FontWeight
           import androidx.compose.ui.text.input.ImeAction
+          import androidx.compose.ui.text.style.TextOverflow
           import androidx.compose.ui.unit.dp
           import androidx.compose.ui.unit.sp
+          import androidx.compose.ui.window.Dialog
+          import androidx.compose.ui.window.DialogProperties
           import kotlinx.coroutines.delay
 
           /** Remote-friendly search: the on-screen keyboard opens only when this dialog is shown. */
@@ -9370,7 +9405,8 @@ jobs:
               AlertDialog(
                   onDismissRequest = onDismiss,
                   containerColor = Pal.Sheet,
-                  title = { Text(stringResource(R.string.search_dialog_title), fontWeight = FontWeight.Bold) },
+                  shape = RoundedCornerShape(26.dp),
+                  title = { Text(stringResource(R.string.search_dialog_title), fontWeight = FontWeight.Bold, color = Pal.Text) },
                   text = {
                       OutlinedTextField(
                           value = draftQuery,
@@ -9391,14 +9427,14 @@ jobs:
                       Button(
                           onClick = { onSearch(draftQuery.trim()) },
                           colors = ButtonDefaults.buttonColors(containerColor = Pal.Ember, contentColor = Pal.Ink)
-                      ) { Text(stringResource(R.string.search_action), fontWeight = FontWeight.Bold) }
+                      ) { Text(stringResource(R.string.search_action), fontWeight = FontWeight.Bold, color = Pal.Ink) }
                   },
                   dismissButton = {
                       Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                           if (draftQuery.isNotEmpty() || initialQuery.isNotEmpty()) {
-                              TextButton(onClick = onClear) { Text(stringResource(R.string.clear)) }
+                              TextButton(onClick = onClear) { Text(stringResource(R.string.clear), color = Pal.Muted) }
                           }
-                          TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
+                          TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel), color = Pal.Muted) }
                       }
                   }
               )
@@ -9407,6 +9443,8 @@ jobs:
           @Composable
           fun ManageSongDialog(
               song: SongItem,
+              cover: CoverSpec,
+              artKey: String?,
               isFavorite: Boolean,
               isInQuranSection: Boolean,
               canDelete: Boolean,
@@ -9419,90 +9457,258 @@ jobs:
               onDismiss: () -> Unit
           ) {
               val folderDisplay = song.folder.substringAfterLast('/').ifBlank { song.folder }
-              AlertDialog(
+              val sheetShape = RoundedCornerShape(28.dp)
+              val targetAccent = if (isInQuranSection) Pal.Ember else Pal.Gold
+              val targetSectionName = stringResource(if (isInQuranSection) R.string.section_music else R.string.section_quran)
+
+              val containerBrush = if (isInQuranSection) {
+                  Brush.verticalGradient(listOf(Color(0xFF0E2920), Color(0xFF071914)))
+              } else {
+                  Brush.verticalGradient(listOf(Color(0xFF1C1926), Color(0xFF121019)))
+              }
+              val containerBorder = if (isInQuranSection) Pal.Gold.copy(alpha = 0.30f) else Color(0x28F4F1EA)
+              val dividerColor = if (isInQuranSection) Pal.Gold.copy(alpha = 0.14f) else Pal.Line
+              val mutedColor = if (isInQuranSection) Pal.Sage else Pal.Muted
+              val focusRing = if (isInQuranSection) Pal.Gold else Pal.Ember
+
+              Dialog(
                   onDismissRequest = onDismiss,
-                  containerColor = Pal.Sheet,
-                  title = { Text(stringResource(R.string.manage_audio_title), fontWeight = FontWeight.Bold) },
-                  text = {
+                  properties = DialogProperties(usePlatformDefaultWidth = false)
+              ) {
+                  Column(
+                      modifier = Modifier
+                          .padding(horizontal = 20.dp, vertical = 24.dp)
+                          .widthIn(max = 420.dp)
+                          .fillMaxWidth()
+                          .clip(sheetShape)
+                          .background(containerBrush)
+                          .border(1.dp, containerBorder, sheetShape)
+                          .padding(18.dp),
+                      verticalArrangement = Arrangement.spacedBy(12.dp)
+                  ) {
+                      // Header: cover, title, folder, and close button
+                      Row(
+                          modifier = Modifier.fillMaxWidth(),
+                          verticalAlignment = Alignment.CenterVertically,
+                          horizontalArrangement = Arrangement.spacedBy(12.dp)
+                      ) {
+                          GenerativeCover(
+                              spec = cover,
+                              artKey = artKey,
+                              modifier = Modifier.size(52.dp),
+                              shape = RoundedCornerShape(14.dp)
+                          )
+                          Column(
+                              modifier = Modifier.weight(1f),
+                              verticalArrangement = Arrangement.spacedBy(3.dp)
+                          ) {
+                              Text(
+                                  song.title,
+                                  fontSize = if (isInQuranSection) 18.sp else 16.sp,
+                                  fontFamily = if (isInQuranSection) PulseFonts.quran else null,
+                                  fontWeight = FontWeight.Bold,
+                                  color = if (isInQuranSection) Pal.GoldLight else Pal.Text,
+                                  maxLines = 1,
+                                  overflow = TextOverflow.Ellipsis
+                              )
+                              Text(
+                                  listOf(song.artist, folderDisplay)
+                                      .filter { it.isNotBlank() }
+                                      .distinct()
+                                      .joinToString(" · "),
+                                  fontSize = 12.sp,
+                                  color = mutedColor,
+                                  maxLines = 1,
+                                  overflow = TextOverflow.Ellipsis
+                              )
+                          }
+                          RoundIconButton(
+                              icon = Icons.Rounded.Close,
+                              contentDescription = stringResource(R.string.close),
+                              onClick = onDismiss,
+                              size = 36.dp,
+                              iconSize = 18.dp,
+                              tint = mutedColor,
+                              container = Color(0x12FFFFFF),
+                              borderColor = dividerColor,
+                              ring = focusRing
+                          )
+                      }
+
+                      HorizontalDivider(color = dividerColor, thickness = 1.dp)
+
                       Column(
                           modifier = Modifier.verticalScroll(rememberScrollState()),
-                          verticalArrangement = Arrangement.spacedBy(10.dp)
+                          verticalArrangement = Arrangement.spacedBy(8.dp)
                       ) {
-                          Text(song.title, color = if (isInQuranSection) Pal.GoldLight else Pal.Ember, fontWeight = FontWeight.SemiBold)
-                          Text(stringResource(R.string.folder_label, song.folder), fontSize = 12.sp, color = Pal.Muted)
-                          Spacer(Modifier.height(4.dp))
-                          OutlinedButton(onClick = onToggleFavorite, modifier = Modifier.fillMaxWidth()) {
-                              Icon(
-                                  if (isFavorite) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
-                                  contentDescription = null,
-                                  tint = if (isFavorite) Color(0xFFFF6B8B) else Pal.Text,
-                                  modifier = Modifier.size(18.dp)
-                              )
-                              Spacer(Modifier.width(8.dp))
-                              Text(stringResource(if (isFavorite) R.string.remove_from_favorites else R.string.add_to_favorites))
-                          }
-                          Button(
-                              onClick = onMoveSongSection,
-                              colors = ButtonDefaults.buttonColors(
-                                  containerColor = if (isInQuranSection) Pal.Ember else Pal.Gold,
-                                  contentColor = Pal.Ink
-                              ),
-                              modifier = Modifier.fillMaxWidth()
-                          ) {
-                              Icon(
-                                  if (isInQuranSection) Icons.Rounded.MusicNote else Icons.Rounded.MenuBook,
-                                  contentDescription = null,
-                                  modifier = Modifier.size(18.dp)
-                              )
-                              Spacer(Modifier.width(8.dp))
-                              Text(
-                                  stringResource(if (isInQuranSection) R.string.move_song_to_music else R.string.move_song_to_quran),
-                                  fontWeight = FontWeight.Bold
-                              )
-                          }
-                          OutlinedButton(onClick = onMoveFolderSection, modifier = Modifier.fillMaxWidth()) {
-                              Icon(
-                                  Icons.Rounded.SwapHoriz,
-                                  contentDescription = null,
-                                  tint = if (isInQuranSection) Pal.Ember else Pal.Gold,
-                                  modifier = Modifier.size(18.dp)
-                              )
-                              Spacer(Modifier.width(8.dp))
-                              Text(
-                                  stringResource(
-                                      if (isInQuranSection) R.string.move_folder_to_music else R.string.move_folder_to_quran,
-                                      folderDisplay
-                                  )
-                              )
-                          }
-                          OutlinedButton(onClick = onHideSong, modifier = Modifier.fillMaxWidth()) {
-                              Icon(Icons.Rounded.VisibilityOff, contentDescription = null, modifier = Modifier.size(18.dp))
-                              Spacer(Modifier.width(8.dp))
-                              Text(stringResource(R.string.hide_song_only))
-                          }
-                          OutlinedButton(onClick = onHideFolder, modifier = Modifier.fillMaxWidth()) {
-                              Icon(Icons.Rounded.Folder, contentDescription = null, modifier = Modifier.size(18.dp))
-                              Spacer(Modifier.width(8.dp))
-                              Text(stringResource(R.string.hide_entire_folder, folderDisplay))
-                          }
+                          // Favorite
+                          val favColor = Color(0xFFFF6B8B)
+                          ManageActionRow(
+                              icon = if (isFavorite) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
+                              title = stringResource(if (isFavorite) R.string.remove_from_favorites else R.string.add_to_favorites),
+                              subtitle = null,
+                              iconTint = if (isFavorite) favColor else Pal.Text,
+                              iconBg = if (isFavorite) favColor.copy(alpha = 0.18f) else Color(0x14FFFFFF),
+                              containerBg = if (isFavorite) favColor.copy(alpha = 0.09f) else Color(0x0BFFFFFF),
+                              borderColor = if (isFavorite) favColor.copy(alpha = 0.30f) else dividerColor,
+                              titleColor = Pal.Text,
+                              subtitleColor = mutedColor,
+                              ringColor = focusRing,
+                              onClick = onToggleFavorite
+                          )
+
+                          // Move single track (accented glass highlight, crisp contrast)
+                          ManageActionRow(
+                              icon = if (isInQuranSection) Icons.Rounded.MusicNote else Icons.Rounded.MenuBook,
+                              title = stringResource(if (isInQuranSection) R.string.action_move_to_music else R.string.action_move_to_quran),
+                              subtitle = stringResource(R.string.action_this_track_only),
+                              iconTint = if (isInQuranSection) Pal.Ember else Pal.GoldLight,
+                              iconBg = targetAccent.copy(alpha = 0.20f),
+                              containerBg = if (isInQuranSection) Pal.Ember.copy(alpha = 0.13f) else Color(0x2810B981),
+                              borderColor = targetAccent.copy(alpha = 0.45f),
+                              titleColor = if (isInQuranSection) Pal.Text else Pal.GoldLight,
+                              subtitleColor = if (isInQuranSection) Pal.Muted else Pal.Mint.copy(alpha = 0.78f),
+                              ringColor = targetAccent,
+                              onClick = onMoveSongSection
+                          )
+
+                          // Move entire folder
+                          ManageActionRow(
+                              icon = Icons.Rounded.SwapHoriz,
+                              title = stringResource(R.string.action_move_entire_folder),
+                              subtitle = stringResource(R.string.action_folder_to_section, folderDisplay, targetSectionName),
+                              iconTint = targetAccent,
+                              iconBg = targetAccent.copy(alpha = 0.14f),
+                              containerBg = Color(0x0BFFFFFF),
+                              borderColor = dividerColor,
+                              titleColor = Pal.Text,
+                              subtitleColor = mutedColor,
+                              ringColor = focusRing,
+                              onClick = onMoveFolderSection
+                          )
+
+                          HorizontalDivider(
+                              color = dividerColor,
+                              thickness = 1.dp,
+                              modifier = Modifier.padding(vertical = 2.dp)
+                          )
+
+                          // Hide single track
+                          ManageActionRow(
+                              icon = Icons.Rounded.VisibilityOff,
+                              title = stringResource(R.string.action_hide_track),
+                              subtitle = stringResource(R.string.action_from_pulse_only),
+                              iconTint = mutedColor,
+                              iconBg = Color(0x12FFFFFF),
+                              containerBg = Color(0x08FFFFFF),
+                              borderColor = dividerColor,
+                              titleColor = Pal.Text,
+                              subtitleColor = mutedColor,
+                              ringColor = focusRing,
+                              onClick = onHideSong
+                          )
+
+                          // Hide entire folder
+                          ManageActionRow(
+                              icon = Icons.Rounded.Folder,
+                              title = stringResource(R.string.action_hide_folder),
+                              subtitle = folderDisplay,
+                              iconTint = mutedColor,
+                              iconBg = Color(0x12FFFFFF),
+                              containerBg = Color(0x08FFFFFF),
+                              borderColor = dividerColor,
+                              titleColor = Pal.Text,
+                              subtitleColor = mutedColor,
+                              ringColor = focusRing,
+                              onClick = onHideFolder
+                          )
+
+                          // Permanent delete (local files only)
                           if (canDelete) {
-                              Button(
-                                  onClick = onDelete,
-                                  colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFB91C1C), contentColor = Color.White),
-                                  modifier = Modifier.fillMaxWidth()
-                              ) {
-                                  Icon(Icons.Rounded.Delete, contentDescription = null, modifier = Modifier.size(18.dp))
-                                  Spacer(Modifier.width(8.dp))
-                                  Text(stringResource(R.string.delete_permanently))
-                              }
+                              ManageActionRow(
+                                  icon = Icons.Rounded.Delete,
+                                  title = stringResource(R.string.action_delete_track),
+                                  subtitle = stringResource(R.string.action_delete_desc),
+                                  iconTint = Pal.Danger,
+                                  iconBg = Pal.Danger.copy(alpha = 0.18f),
+                                  containerBg = Pal.Danger.copy(alpha = 0.10f),
+                                  borderColor = Pal.Danger.copy(alpha = 0.36f),
+                                  titleColor = Pal.Danger,
+                                  subtitleColor = Color(0xFFDDA1A7),
+                                  ringColor = Pal.Danger,
+                                  onClick = onDelete
+                              )
                           }
                       }
-                  },
-                  confirmButton = {},
-                  dismissButton = {
-                      TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
                   }
-              )
+              }
+          }
+
+          @Composable
+          private fun ManageActionRow(
+              icon: ImageVector,
+              title: String,
+              subtitle: String?,
+              iconTint: Color,
+              iconBg: Color,
+              containerBg: Color,
+              borderColor: Color,
+              titleColor: Color,
+              subtitleColor: Color,
+              ringColor: Color,
+              onClick: () -> Unit
+          ) {
+              val shape = RoundedCornerShape(16.dp)
+              Row(
+                  modifier = Modifier
+                      .fillMaxWidth()
+                      .focusGlow(shape, ring = ringColor, scaleTo = 1.025f)
+                      .clip(shape)
+                      .background(containerBg)
+                      .border(1.dp, borderColor, shape)
+                      .clickable(role = Role.Button, onClick = onClick)
+                      .padding(horizontal = 12.dp, vertical = 10.dp),
+                  verticalAlignment = Alignment.CenterVertically,
+                  horizontalArrangement = Arrangement.spacedBy(12.dp)
+              ) {
+                  Box(
+                      modifier = Modifier
+                          .size(38.dp)
+                          .clip(RoundedCornerShape(12.dp))
+                          .background(iconBg),
+                      contentAlignment = Alignment.Center
+                  ) {
+                      Icon(icon, contentDescription = null, tint = iconTint, modifier = Modifier.size(20.dp))
+                  }
+                  Column(
+                      modifier = Modifier.weight(1f),
+                      verticalArrangement = Arrangement.spacedBy(2.dp)
+                  ) {
+                      Text(
+                          title,
+                          fontSize = 14.sp,
+                          fontWeight = FontWeight.SemiBold,
+                          color = titleColor,
+                          maxLines = 1,
+                          overflow = TextOverflow.Ellipsis
+                      )
+                      if (!subtitle.isNullOrBlank()) {
+                          Text(
+                              subtitle,
+                              fontSize = 12.sp,
+                              color = subtitleColor,
+                              maxLines = 1,
+                              overflow = TextOverflow.Ellipsis
+                          )
+                      }
+                  }
+                  Icon(
+                      Icons.Rounded.ChevronRight,
+                      contentDescription = null,
+                      tint = subtitleColor.copy(alpha = 0.65f),
+                      modifier = Modifier.size(18.dp)
+                  )
+              }
           }
 
           @Composable
@@ -9522,7 +9728,8 @@ jobs:
               AlertDialog(
                   onDismissRequest = onDismiss,
                   containerColor = Pal.Sheet,
-                  title = { Text(stringResource(R.string.sleep_timer), fontWeight = FontWeight.Bold) },
+                  shape = RoundedCornerShape(26.dp),
+                  title = { Text(stringResource(R.string.sleep_timer), fontWeight = FontWeight.Bold, color = Pal.Text) },
                   text = {
                       Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                           options.forEach { (mins, labelRes) ->
@@ -9541,7 +9748,7 @@ jobs:
                   },
                   confirmButton = {},
                   dismissButton = {
-                      TextButton(onClick = onDismiss) { Text(stringResource(R.string.close)) }
+                      TextButton(onClick = onDismiss) { Text(stringResource(R.string.close), color = Pal.Muted) }
                   }
               )
           }
@@ -9561,7 +9768,8 @@ jobs:
               AlertDialog(
                   onDismissRequest = onDismiss,
                   containerColor = Pal.Sheet,
-                  title = { Text(stringResource(R.string.equalizer), fontWeight = FontWeight.Bold) },
+                  shape = RoundedCornerShape(26.dp),
+                  title = { Text(stringResource(R.string.equalizer), fontWeight = FontWeight.Bold, color = Pal.Text) },
                   text = {
                       Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                           presets.forEach { (preset, labelRes) ->
@@ -9575,7 +9783,7 @@ jobs:
                   },
                   confirmButton = {},
                   dismissButton = {
-                      TextButton(onClick = onDismiss) { Text(stringResource(R.string.close)) }
+                      TextButton(onClick = onDismiss) { Text(stringResource(R.string.close), color = Pal.Muted) }
                   }
               )
           }
@@ -9666,10 +9874,10 @@ jobs:
           mkdir -p dist
           if [ "$BUILD_MODE" = "release" ]; then
             gradle assembleRelease
-            cp app/build/outputs/apk/release/app-release.apk "dist/PulsePlayer-v3.6.${GITHUB_RUN_NUMBER}.apk"
+            cp app/build/outputs/apk/release/app-release.apk "dist/PulsePlayer-v3.7.${GITHUB_RUN_NUMBER}.apk"
           else
             gradle assembleDebug
-            cp app/build/outputs/apk/debug/app-debug.apk "dist/PulsePlayer-v3.6.${GITHUB_RUN_NUMBER}-debug-UNSIGNED-KEY.apk"
+            cp app/build/outputs/apk/debug/app-debug.apk "dist/PulsePlayer-v3.7.${GITHUB_RUN_NUMBER}-debug-UNSIGNED-KEY.apk"
           fi
 
       - name: Remove signing key from runner
