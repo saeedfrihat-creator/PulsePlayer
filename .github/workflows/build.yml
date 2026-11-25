@@ -102,7 +102,7 @@ jobs:
                   minSdk = 26
                   targetSdk = 35
                   versionCode = 100 + ciRunNumber
-                  versionName = "3.7.$ciRunNumber-KaabaEdition"
+                  versionName = "3.10.$ciRunNumber-KaabaEdition"
               }
 
               signingConfigs {
@@ -374,6 +374,33 @@ jobs:
               <string name="action_delete_track">Delete from device</string>
               <string name="action_delete_desc">Permanently removes the audio file</string>
 
+              <!-- Playback mode, EQ & studio feedback -->
+              <string name="playback_mode_title">Playback mode</string>
+              <string name="mode_repeat_all_desc">Loops all tracks in this folder</string>
+              <string name="mode_repeat_one_desc">Repeats the current track continuously</string>
+              <string name="mode_play_once_desc">Pauses automatically when this track ends</string>
+              <string name="mode_repeat_off_desc">Plays through the folder once, then stops</string>
+              <string name="eq_normal_desc">Flat, natural sound without adjustment</string>
+              <string name="eq_voice_desc">Enhances vocal clarity for Quran &amp; recitations</string>
+              <string name="eq_bass_desc">Deeper, fuller low frequencies</string>
+              <string name="eq_warm_desc">Soft highs with a rich, relaxing tone</string>
+              <string name="toast_eq_set">Equalizer: %1$s</string>
+              <string name="toast_shuffle_on">Shuffle on</string>
+              <string name="toast_shuffle_off">Shuffle off</string>
+              <string name="toast_speed_set">Speed: %1$s</string>
+              <string name="sleep_active_remaining">Active · %1$s remaining</string>
+              <string name="sleep_active_end">Active · stops after this track</string>
+
+              <!-- Language switcher -->
+              <string name="language_title">Language</string>
+              <string name="language_system">Device language (Auto)</string>
+              <string name="language_system_desc">Follows your phone or TV language</string>
+              <string name="language_arabic">العربية</string>
+              <string name="language_arabic_desc">Arabic</string>
+              <string name="language_english">English</string>
+              <string name="language_english_desc">English</string>
+              <string name="toast_language_changed">Language updated</string>
+
               <!-- Library scanning -->
               <string name="untitled">Untitled</string>
               <string name="unknown_artist">Unknown artist</string>
@@ -587,6 +614,33 @@ jobs:
               <string name="action_hide_folder">إخفاء المجلد بالكامل</string>
               <string name="action_delete_track">حذف الملف من الجهاز</string>
               <string name="action_delete_desc">يحذف الملف نهائياً من التخزين</string>
+
+              <!-- وضع التشغيل، المعادل وتنبيهات الاستوديو -->
+              <string name="playback_mode_title">وضع التشغيل</string>
+              <string name="mode_repeat_all_desc">يعيد تشغيل جميع مقاطع المجلد</string>
+              <string name="mode_repeat_one_desc">يكرّر المقطع الحالي باستمرار</string>
+              <string name="mode_play_once_desc">يتوقف تلقائياً فور انتهاء هذا المقطع</string>
+              <string name="mode_repeat_off_desc">يشغّل المجلد مرة واحدة ثم يتوقف</string>
+              <string name="eq_normal_desc">صوت طبيعي متوازن بدون تعديل</string>
+              <string name="eq_voice_desc">يُبرز وضوح الصوت للتلاوات والقرآن</string>
+              <string name="eq_bass_desc">عمق وقوة أكبر للترددات المنخفضة</string>
+              <string name="eq_warm_desc">نغمة دافئة مريحة للأذن</string>
+              <string name="toast_eq_set">معادل الصوت: %1$s</string>
+              <string name="toast_shuffle_on">التشغيل العشوائي: مفعّل</string>
+              <string name="toast_shuffle_off">التشغيل العشوائي: متوقف</string>
+              <string name="toast_speed_set">سرعة التشغيل: %1$s</string>
+              <string name="sleep_active_remaining">مفعّل · متبقي %1$s</string>
+              <string name="sleep_active_end">مفعّل · يتوقف بنهاية المقطع</string>
+
+              <!-- تبديل اللغة -->
+              <string name="language_title">اللغة</string>
+              <string name="language_system">لغة الجهاز (تلقائي)</string>
+              <string name="language_system_desc">يتبع لغة الهاتف أو التلفاز</string>
+              <string name="language_arabic">العربية</string>
+              <string name="language_arabic_desc">اللغة العربية</string>
+              <string name="language_english">English</string>
+              <string name="language_english_desc">اللغة الإنجليزية</string>
+              <string name="toast_language_changed">تم تغيير اللغة</string>
 
               <!-- فحص المكتبة -->
               <string name="untitled">بدون عنوان</string>
@@ -1852,6 +1906,10 @@ jobs:
 
           object PlaybackBridge {
               @Volatile
+              var playbackMode: Int = MODE_REPEAT_ALL
+                  private set
+
+              @Volatile
               var stopAfterCurrent: Boolean = false
                   private set
 
@@ -1878,7 +1936,7 @@ jobs:
               fun attach(service: PlaybackService, player: ExoPlayer) {
                   serviceRef = WeakReference(service)
                   exoPlayerRef = WeakReference(player)
-                  player.pauseAtEndOfMediaItems = stopAfterCurrent || sleepTimerTargetMs == -1L
+                  applyToExoPlayer(player, playbackMode)
               }
 
               fun detach() {
@@ -1887,13 +1945,25 @@ jobs:
               }
 
               @OptIn(UnstableApi::class)
-              fun setStopAfterCurrent(enabled: Boolean) {
-                  stopAfterCurrent = enabled
+              fun applyPlaybackMode(mode: Int) {
+                  val clean = mode.coerceIn(0, 3)
+                  playbackMode = clean
+                  stopAfterCurrent = clean == MODE_PLAY_ONCE
                   exoPlayerRef?.get()?.let { p ->
                       Handler(p.applicationLooper).post {
-                          p.pauseAtEndOfMediaItems = enabled || sleepTimerTargetMs == -1L
+                          applyToExoPlayer(p, clean)
                       }
                   }
+              }
+
+              @OptIn(UnstableApi::class)
+              private fun applyToExoPlayer(p: ExoPlayer, mode: Int) {
+                  p.repeatMode = when (mode) {
+                      MODE_REPEAT_ALL -> Player.REPEAT_MODE_ALL
+                      MODE_REPEAT_ONE -> Player.REPEAT_MODE_ONE
+                      else -> Player.REPEAT_MODE_OFF
+                  }
+                  p.pauseAtEndOfMediaItems = (mode == MODE_PLAY_ONCE) || (sleepTimerTargetMs == -1L)
               }
 
               fun setEqPreset(preset: Int) {
@@ -2073,6 +2143,7 @@ jobs:
                   super.onCreate()
                   val prefs = LibraryStore.prefs(this)
                   PlaybackBridge.stopOnTaskRemoved = prefs.getBoolean("stop_on_task_removed", true)
+                  PlaybackBridge.applyPlaybackMode(prefs.getInt("playback_mode", MODE_REPEAT_ALL))
                   PlaybackBridge.setEqPreset(prefs.getInt("eq_preset", EQ_NORMAL))
                   isTv = (resources.configuration.uiMode and Configuration.UI_MODE_TYPE_MASK) ==
                       Configuration.UI_MODE_TYPE_TELEVISION ||
@@ -2117,6 +2188,17 @@ jobs:
                           val scheme = mediaItem?.localConfiguration?.uri?.scheme
                           val isLocal = scheme == "content" || scheme == "file"
                           player.setWakeMode(if (isLocal) C.WAKE_MODE_LOCAL else C.WAKE_MODE_NETWORK)
+                          // Safety net: guarantee "Stop after this track" or "End of track" sleep timer never auto-plays the next track.
+                          if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO &&
+                              (PlaybackBridge.stopAfterCurrent || PlaybackBridge.sleepTimerTargetMs == -1L)
+                          ) {
+                              player.pause()
+                              player.seekTo(0L)
+                              if (PlaybackBridge.sleepTimerTargetMs == -1L) {
+                                  PlaybackBridge.sleepTimerTargetMs = 0L
+                                  player.pauseAtEndOfMediaItems = PlaybackBridge.stopAfterCurrent
+                              }
+                          }
                       }
 
                       override fun onPlaybackStateChanged(playbackState: Int) {
@@ -2126,6 +2208,12 @@ jobs:
                               if (player.audioSessionId != eqSessionId) {
                                   attachEqualizer(player.audioSessionId)
                               }
+                          } else if (playbackState == Player.STATE_ENDED) {
+                              if (PlaybackBridge.sleepTimerTargetMs == -1L) {
+                                  PlaybackBridge.sleepTimerTargetMs = 0L
+                                  player.pauseAtEndOfMediaItems = PlaybackBridge.stopAfterCurrent
+                              }
+                              player.playWhenReady = false
                           }
                       }
 
@@ -2140,11 +2228,16 @@ jobs:
                               }
                               return
                           }
-                          if (PlaybackBridge.sleepTimerTargetMs == -1L &&
-                              reason == Player.PLAY_WHEN_READY_CHANGE_REASON_END_OF_MEDIA_ITEM
-                          ) {
-                              PlaybackBridge.sleepTimerTargetMs = 0L
-                              player.pauseAtEndOfMediaItems = PlaybackBridge.stopAfterCurrent
+                          if (reason == Player.PLAY_WHEN_READY_CHANGE_REASON_END_OF_MEDIA_ITEM) {
+                              if (PlaybackBridge.sleepTimerTargetMs == -1L) {
+                                  PlaybackBridge.sleepTimerTargetMs = 0L
+                                  player.pauseAtEndOfMediaItems = PlaybackBridge.stopAfterCurrent
+                              }
+                              if (PlaybackBridge.stopAfterCurrent) {
+                                  // Reset to 0:00 while paused so pressing Play (including VBR MP3s or Bluetooth/TV remote)
+                                  // replays this track cleanly instead of spilling into the next track.
+                                  player.seekTo(0L)
+                              }
                           }
                           pausedAtMs = SystemClock.elapsedRealtime()
                           lifecycleHandler.postDelayed(releaseForegroundRunnable, KEEP_FOREGROUND_PAUSED_MS + 1_000L)
@@ -2194,6 +2287,10 @@ jobs:
                   mediaSession = MediaSession.Builder(this, player)
                       .setSessionActivity(sessionActivityPendingIntent)
                       .build()
+                  if (PlaybackBridge.sleepTimerTargetMs > 0L) {
+                      lifecycleHandler.removeCallbacks(sleepTimerRunnable)
+                      lifecycleHandler.postDelayed(sleepTimerRunnable, 1_000L)
+                  }
               }
 
               /**
@@ -2281,8 +2378,15 @@ jobs:
                   super.onUpdateNotification(session, keepForeground)
               }
 
+              @OptIn(UnstableApi::class)
               fun applyEqPresetAsync(preset: Int) {
-                  lifecycleHandler.post { applyEqPreset(preset) }
+                  lifecycleHandler.post {
+                      val player = mediaSession?.player as? ExoPlayer
+                      if (equalizer == null && player != null) {
+                          attachEqualizer(player.audioSessionId)
+                      }
+                      applyEqPreset(preset)
+                  }
               }
 
               @OptIn(UnstableApi::class)
@@ -2508,6 +2612,16 @@ jobs:
               return ext.isEmpty() || ext in PLAYABLE_AUDIO_EXTENSIONS
           }
 
+          internal fun cleanArtistName(raw: String?, fallback: String): String {
+              val t = raw?.trim() ?: ""
+              if (t.isBlank()) return fallback
+              val lower = t.lowercase()
+              if (lower == "<unknown>" || lower == "[unknown artist]" || lower == "unknown artist" || lower == "unknown") {
+                  return fallback
+              }
+              return t
+          }
+
           object NavidromeHelper {
               const val NAV_SCHEME = "pulsenav"
               /** Shows up as a player named "PulsePlayer" in Navidrome's Players page. */
@@ -2720,7 +2834,7 @@ jobs:
                                   SongItem(
                                       id = "local_$id",
                                       title = cursor.getString(titleCol) ?: untitled,
-                                      artist = cursor.getString(artistCol)?.takeIf { it != "<unknown>" } ?: unknownArtist,
+                                      artist = cleanArtistName(cursor.getString(artistCol), folderName.substringAfterLast('/').ifBlank { unknownArtist }),
                                       album = cursor.getString(albumCol) ?: "",
                                       folder = folderName,
                                       durationMs = cursor.getLong(durCol),
@@ -2946,7 +3060,7 @@ jobs:
                                   val title = obj.optString("title", "").ifBlank {
                                       fileNameTitle.ifBlank { untitled }
                                   }
-                                  val artist = obj.optString("artist", "").ifBlank { folderName.substringAfterLast('/') }
+                                  val artist = cleanArtistName(obj.optString("artist", ""), folderName.substringAfterLast('/'))
                                   val coverArtId = obj.optString("coverArt", "")
 
                                   allSongs.add(
@@ -3085,6 +3199,14 @@ jobs:
                   private set
               var useRealAlbumArt by mutableStateOf(prefs.getBoolean("use_real_album_art", true))
                   private set
+              var appLanguage by mutableStateOf(AppLocale.savedCode(app))
+                  private set
+
+              private fun locCtx(): Context = AppLocale.wrap(appContext)
+              private fun locStr(resId: Int, vararg args: Any): String {
+                  val ctx = locCtx()
+                  return if (args.isEmpty()) ctx.getString(resId) else ctx.getString(resId, *args)
+              }
               var sleepTimerRemainingSec by mutableLongStateOf(PlaybackBridge.sleepTimerRemainingSec())
                   private set
               var activeSection by mutableStateOf(
@@ -3192,7 +3314,7 @@ jobs:
                           FolderGroup(
                               key = FAVORITES_QURAN_KEY,
                               sourceId = FAVORITES_QURAN_KEY,
-                              path = appContext.getString(R.string.favorites_quran_folder),
+                              path = appLanguage.let { locStr(R.string.favorites_quran_folder) },
                               songs = favs,
                               rawKey = FAVORITES_QURAN_KEY
                           )
@@ -3221,7 +3343,7 @@ jobs:
                           FolderGroup(
                               key = FAVORITES_MUSIC_KEY,
                               sourceId = FAVORITES_MUSIC_KEY,
-                              path = appContext.getString(R.string.favorites_music_folder),
+                              path = appLanguage.let { locStr(R.string.favorites_music_folder) },
                               songs = favs,
                               rawKey = FAVORITES_MUSIC_KEY
                           )
@@ -3401,7 +3523,7 @@ jobs:
                       .putStringSet("forced_music_songs_v1", HashSet(nextMusic))
                       .apply()
                   val msgRes = if (target == LibrarySection.QURAN) R.string.toast_song_moved_to_quran else R.string.toast_song_moved_to_music
-                  appContext.showToast(appContext.getString(msgRes, song.title))
+                  appContext.showToast(locStr(msgRes, song.title))
               }
 
               fun moveFolderToSection(rawFolderKey: String, target: LibrarySection) {
@@ -3444,7 +3566,7 @@ jobs:
                       screenStack = screenStack.dropLast(1) + Screen.Folder(sectionFolderKey(target, rawFolderKey))
                   }
                   val msgRes = if (target == LibrarySection.QURAN) R.string.toast_moved_to_quran else R.string.toast_moved_to_music
-                  appContext.showToast(appContext.getString(msgRes, displayName))
+                  appContext.showToast(locStr(msgRes, displayName))
               }
 
               fun resetFolderOverrides() {
@@ -3459,7 +3581,7 @@ jobs:
                       .remove("forced_quran_songs_v1")
                       .remove("forced_music_songs_v1")
                       .apply()
-                  appContext.showToast(appContext.getString(R.string.toast_categories_reset))
+                  appContext.showToast(locStr(R.string.toast_categories_reset))
               }
 
               fun coverOf(folder: FolderGroup): CoverSpec = when (folder.key) {
@@ -3494,7 +3616,7 @@ jobs:
                   prefs.edit().putStringSet("favorite_songs_v1", HashSet(next)).apply()
                   if (announce) {
                       appContext.showToast(
-                          appContext.getString(if (added) R.string.toast_added_favorite else R.string.toast_removed_favorite)
+                          locStr(if (added) R.string.toast_added_favorite else R.string.toast_removed_favorite)
                       )
                   }
               }
@@ -3510,11 +3632,32 @@ jobs:
                   prefs.edit().putBoolean("use_real_album_art", enabled).apply()
               }
 
-              fun setEqPresetPref(preset: Int) {
+              fun setAppLanguagePref(code: String) {
+                  val clean = if (code == LANG_AR || code == LANG_EN) code else LANG_SYSTEM
+                  if (clean == appLanguage) return
+                  AppLocale.saveCode(appContext, clean)
+                  appLanguage = clean
+                  appContext.showToast(locStr(R.string.toast_language_changed))
+              }
+
+              fun setEqPresetPref(preset: Int, announce: Boolean = true) {
                   val clean = preset.coerceIn(EQ_NORMAL, EQ_WARM)
                   eqPreset = clean
                   prefs.edit().putInt("eq_preset", clean).apply()
                   PlaybackBridge.setEqPreset(clean)
+                  if (announce) {
+                      val labelRes = when (clean) {
+                          EQ_VOICE -> R.string.eq_voice
+                          EQ_BASS -> R.string.eq_bass
+                          EQ_WARM -> R.string.eq_warm
+                          else -> R.string.eq_normal
+                      }
+                      appContext.showToast(locStr(R.string.toast_eq_set, locStr(labelRes)))
+                  }
+              }
+
+              fun refreshSleepTimer() {
+                  sleepTimerRemainingSec = PlaybackBridge.sleepTimerRemainingSec()
               }
 
               fun setSleepTimer(minutes: Int) {
@@ -3525,7 +3668,7 @@ jobs:
                       else -> minutes * 60L
                   }
                   if (minutes == 0) {
-                      appContext.showToast(appContext.getString(R.string.toast_sleep_off))
+                      appContext.showToast(locStr(R.string.toast_sleep_off))
                   } else {
                       val labelRes = when (minutes) {
                           15 -> R.string.sleep_15
@@ -3534,7 +3677,7 @@ jobs:
                           60 -> R.string.sleep_60
                           else -> R.string.sleep_end_of_track
                       }
-                      appContext.showToast(appContext.getString(R.string.toast_sleep_set, appContext.getString(labelRes)))
+                      appContext.showToast(locStr(R.string.toast_sleep_set, locStr(labelRes)))
                   }
               }
 
@@ -3545,6 +3688,8 @@ jobs:
                   playbackSpeed = next
                   prefs.edit().putFloat("playback_speed", next).apply()
                   player?.setPlaybackSpeed(next)
+                  val label = if (next % 1f == 0f) "${next.toInt()}x" else "${next}x"
+                  appContext.showToast(locStr(R.string.toast_speed_set, label))
               }
 
               private fun loadResumeSnapshot(prefix: String): ResumeSnapshot? {
@@ -3721,6 +3866,7 @@ jobs:
                   when (source.type) {
                       SourceType.DEVICE -> {
                           if (!hasAudioPermission) return
+                          if (!force && songsBySource[source.id] != null) return
                           viewModelScope.launch {
                               setLoading(source.id, true)
                               val songs = MusicRepository.loadDeviceSongs(appContext, source)
@@ -3762,7 +3908,7 @@ jobs:
                                   } else {
                                       val e = result.exceptionOrNull()
                                       val reason = e?.localizedMessage?.takeIf { it.isNotBlank() } ?: e?.javaClass?.simpleName ?: ""
-                                      sourceErrors = sourceErrors + (source.id to appContext.getString(R.string.connection_failed, reason))
+                                      sourceErrors = sourceErrors + (source.id to locStr(R.string.connection_failed, reason))
                                   }
                               }
                               setLoading(source.id, false)
@@ -3785,8 +3931,8 @@ jobs:
                       when (source.type) {
                           SourceType.SMB -> source.smbSubFolder.trim().replace('\\', '/').trim('/').substringAfterLast('/')
                               .ifBlank { source.smbShare.trim() }
-                              .ifBlank { appContext.getString(R.string.mode_smb) }
-                          else -> appContext.getString(R.string.mode_navidrome)
+                              .ifBlank { locStr(R.string.mode_smb) }
+                          else -> locStr(R.string.mode_navidrome)
                       }
                   }
                   LibraryStore.upsert(appContext, source.copy(label = label))
@@ -3815,7 +3961,7 @@ jobs:
                   val source = LibrarySource(
                       id = existing?.id ?: DEVICE_SOURCE_ID,
                       type = SourceType.DEVICE,
-                      label = existing?.label?.ifBlank { null } ?: appContext.getString(R.string.library_device),
+                      label = existing?.label?.ifBlank { null } ?: locStr(R.string.library_device),
                       deviceFolders = if (allFolders) emptyList() else selected.sorted()
                   )
                   LibraryStore.upsert(appContext, source)
@@ -3918,10 +4064,18 @@ jobs:
                       if (p.playbackState == Player.STATE_IDLE && p.mediaItemCount > 0) {
                           p.prepare()
                       }
-                      if (p.playbackState == Player.STATE_ENDED ||
-                          (p.duration > 0L && p.currentPosition >= p.duration - 500L)
-                      ) {
-                          p.seekTo(0L)
+                      when {
+                          p.playbackState == Player.STATE_ENDED &&
+                              playbackMode == MODE_REPEAT_OFF &&
+                              p.mediaItemCount > 1 -> {
+                              p.seekTo(0, 0L)
+                              positionMs = 0L
+                          }
+                          p.playbackState == Player.STATE_ENDED ||
+                              (p.duration > 0L && p.currentPosition >= p.duration - 500L) -> {
+                              p.seekTo(0L)
+                              positionMs = 0L
+                          }
                       }
                       p.play()
                   }
@@ -3950,7 +4104,7 @@ jobs:
                   queueIndex = 0
                   queueSize = 0
                   isFullScreen = false
-                  if (announce) appContext.showToast(appContext.getString(R.string.toast_stopped))
+                  if (announce) appContext.showToast(locStr(R.string.toast_stopped))
               }
 
               fun next() {
@@ -3962,51 +4116,62 @@ jobs:
               }
 
               fun rewind() {
-                  player?.let { it.seekTo((it.currentPosition - 15_000L).coerceAtLeast(0L)) }
+                  player?.let { p ->
+                      val target = (p.currentPosition - 15_000L).coerceAtLeast(0L)
+                      p.seekTo(target)
+                      positionMs = target
+                  }
               }
 
               fun forward() {
                   player?.let { p ->
                       val limit = p.duration.takeIf { it > 0L } ?: Long.MAX_VALUE
-                      p.seekTo((p.currentPosition + 15_000L).coerceAtMost(limit))
+                      val target = (p.currentPosition + 15_000L).coerceAtMost(limit)
+                      p.seekTo(target)
+                      positionMs = target
                   }
               }
 
-              fun seekTo(positionMs: Long) {
-                  player?.seekTo(positionMs.coerceAtLeast(0L))
+              fun seekTo(targetMs: Long) {
+                  val safe = targetMs.coerceAtLeast(0L)
+                  player?.seekTo(safe)
+                  positionMs = safe
               }
 
               fun toggleShuffle() {
-                  player?.let { it.shuffleModeEnabled = !it.shuffleModeEnabled }
+                  player?.let { p ->
+                      val next = !p.shuffleModeEnabled
+                      p.shuffleModeEnabled = next
+                      shuffleEnabled = next
+                      appContext.showToast(locStr(if (next) R.string.toast_shuffle_on else R.string.toast_shuffle_off))
+                  }
               }
 
               fun applyPlaybackMode(mode: Int, announce: Boolean) {
-                  playbackMode = mode
-                  prefs.edit().putInt("playback_mode", mode).apply()
+                  val clean = mode.coerceIn(0, 3)
+                  playbackMode = clean
+                  prefs.edit().putInt("playback_mode", clean).apply()
+                  PlaybackBridge.applyPlaybackMode(clean)
                   val p = player
-                  val label = when (mode) {
+                  val label = when (clean) {
                       MODE_REPEAT_ALL -> {
-                          PlaybackBridge.setStopAfterCurrent(false)
                           p?.repeatMode = Player.REPEAT_MODE_ALL
                           R.string.mode_repeat_all
                       }
                       MODE_REPEAT_ONE -> {
-                          PlaybackBridge.setStopAfterCurrent(false)
                           p?.repeatMode = Player.REPEAT_MODE_ONE
                           R.string.mode_repeat_one
                       }
                       MODE_PLAY_ONCE -> {
                           p?.repeatMode = Player.REPEAT_MODE_OFF
-                          PlaybackBridge.setStopAfterCurrent(true)
                           R.string.mode_play_once
                       }
                       else -> {
-                          PlaybackBridge.setStopAfterCurrent(false)
                           p?.repeatMode = Player.REPEAT_MODE_OFF
                           R.string.mode_repeat_off
                       }
                   }
-                  if (announce) appContext.showToast(appContext.getString(label))
+                  if (announce) appContext.showToast(locStr(label))
               }
 
               fun cyclePlaybackMode() {
@@ -4045,16 +4210,21 @@ jobs:
           package com.pulse.player
 
           import android.content.ComponentName
+          import android.content.Context
           import android.os.Bundle
           import android.view.KeyEvent
+          import android.view.View
           import androidx.activity.ComponentActivity
           import androidx.activity.SystemBarStyle
           import androidx.activity.compose.setContent
           import androidx.activity.enableEdgeToEdge
           import androidx.compose.foundation.layout.fillMaxSize
           import androidx.compose.material3.Surface
+          import androidx.compose.runtime.CompositionLocalProvider
           import androidx.compose.runtime.mutableStateOf
           import androidx.compose.ui.Modifier
+          import androidx.compose.ui.platform.LocalLayoutDirection
+          import androidx.compose.ui.unit.LayoutDirection
           import androidx.core.content.ContextCompat
           import androidx.lifecycle.ViewModelProvider
           import androidx.media3.session.MediaController
@@ -4066,18 +4236,30 @@ jobs:
               private var controllerFuture: ListenableFuture<MediaController>? = null
               private val isResumedState = mutableStateOf(false)
 
+              override fun attachBaseContext(newBase: Context) {
+                  super.attachBaseContext(AppLocale.wrap(newBase))
+              }
+
               override fun onCreate(savedInstanceState: Bundle?) {
                   super.onCreate(savedInstanceState)
+                  window.decorView.layoutDirection = resources.configuration.layoutDirection
                   viewModel = ViewModelProvider(this)[PulseViewModel::class.java]
                   PulseFonts.init(this)
                   enableEdgeToEdge(
                       statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
                       navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT)
                   )
+                  val layoutDir = if (resources.configuration.layoutDirection == View.LAYOUT_DIRECTION_RTL) {
+                      LayoutDirection.Rtl
+                  } else {
+                      LayoutDirection.Ltr
+                  }
                   setContent {
-                      PulseTheme {
-                          Surface(modifier = Modifier.fillMaxSize(), color = Pal.Ink) {
-                              PulseApp(vm = viewModel, isResumed = isResumedState.value)
+                      CompositionLocalProvider(LocalLayoutDirection provides layoutDir) {
+                          PulseTheme {
+                              Surface(modifier = Modifier.fillMaxSize(), color = Pal.Ink) {
+                                  PulseApp(vm = viewModel, isResumed = isResumedState.value)
+                              }
                           }
                       }
                   }
@@ -4162,13 +4344,21 @@ jobs:
           package com.pulse.player
 
           import android.content.Context
-          import android.widget.Toast
+          import android.content.res.Configuration
+          import android.content.res.Resources
+          import android.os.Handler
+          import android.os.LocaleList
+          import android.os.Looper
           import androidx.compose.material3.MaterialTheme
           import androidx.compose.material3.ProvideTextStyle
           import androidx.compose.material3.Typography
           import androidx.compose.material3.darkColorScheme
           import androidx.compose.runtime.Composable
           import androidx.compose.runtime.Immutable
+          import androidx.compose.runtime.getValue
+          import androidx.compose.runtime.mutableIntStateOf
+          import androidx.compose.runtime.mutableStateOf
+          import androidx.compose.runtime.setValue
           import androidx.compose.ui.graphics.Color
           import androidx.compose.ui.text.TextStyle
           import androidx.compose.ui.text.ExperimentalTextApi
@@ -4336,8 +4526,80 @@ jobs:
               }
           }
 
+          /** In-app themed toast bus so notifications match Pulse and never clash at the bottom. */
+          object PulseToastBus {
+              private val mainHandler = Handler(Looper.getMainLooper())
+              var message by mutableStateOf<String?>(null)
+                  private set
+              var seq by mutableIntStateOf(0)
+                  private set
+
+              fun show(text: String) {
+                  if (text.isBlank()) return
+                  if (Looper.myLooper() == Looper.getMainLooper()) {
+                      message = text
+                      seq++
+                  } else {
+                      mainHandler.post {
+                          message = text
+                          seq++
+                      }
+                  }
+              }
+
+              fun clear() {
+                  if (Looper.myLooper() == Looper.getMainLooper()) {
+                      message = null
+                  } else {
+                      mainHandler.post { message = null }
+                  }
+              }
+          }
+
           internal fun Context.showToast(text: String) {
-              Toast.makeText(this, text, Toast.LENGTH_SHORT).show()
+              PulseToastBus.show(text)
+          }
+
+          internal const val LANG_SYSTEM = "system"
+          internal const val LANG_AR = "ar"
+          internal const val LANG_EN = "en"
+
+          /** Stores and applies the user's preferred app language across Phone & Android TV. */
+          object AppLocale {
+              private const val KEY_LANG = "app_language"
+
+              fun savedCode(context: Context): String {
+                  val target = context.applicationContext ?: context
+                  val raw = target.getSharedPreferences(LibraryStore.PREFS_NAME, Context.MODE_PRIVATE)
+                      .getString(KEY_LANG, LANG_SYSTEM)
+                  return if (raw == LANG_AR || raw == LANG_EN) raw else LANG_SYSTEM
+              }
+
+              fun saveCode(context: Context, code: String) {
+                  val clean = if (code == LANG_AR || code == LANG_EN) code else LANG_SYSTEM
+                  val target = context.applicationContext ?: context
+                  target.getSharedPreferences(LibraryStore.PREFS_NAME, Context.MODE_PRIVATE)
+                      .edit()
+                      .putString(KEY_LANG, clean)
+                      .commit()
+              }
+
+              fun resolvedLocale(code: String): Locale = when (code) {
+                  LANG_AR -> Locale("ar")
+                  LANG_EN -> Locale.ENGLISH
+                  else -> Resources.getSystem().configuration.locales[0] ?: Locale.getDefault()
+              }
+
+              fun wrap(base: Context): Context {
+                  val code = savedCode(base)
+                  val locale = resolvedLocale(code)
+                  Locale.setDefault(locale)
+                  val config = Configuration(base.resources.configuration)
+                  config.setLocale(locale)
+                  config.setLocales(LocaleList(locale))
+                  config.setLayoutDirection(locale)
+                  return base.createConfigurationContext(config)
+              }
           }
           EOF
 
@@ -5252,7 +5514,13 @@ jobs:
           cat << 'EOF' > app/src/main/java/com/pulse/player/Components.kt
           package com.pulse.player
 
+          import androidx.compose.animation.AnimatedVisibility
           import androidx.compose.animation.core.animateFloatAsState
+          import androidx.compose.animation.core.tween
+          import androidx.compose.animation.fadeIn
+          import androidx.compose.animation.fadeOut
+          import androidx.compose.animation.slideInVertically
+          import androidx.compose.animation.slideOutVertically
           import androidx.compose.foundation.Canvas
           import androidx.compose.foundation.background
           import androidx.compose.foundation.basicMarquee
@@ -5274,6 +5542,7 @@ jobs:
           import androidx.compose.ui.geometry.CornerRadius
           import androidx.compose.ui.geometry.Offset
           import androidx.compose.ui.geometry.Size
+          import androidx.compose.ui.graphics.Brush
           import androidx.compose.ui.graphics.Color
           import androidx.compose.ui.graphics.Shape
           import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -5377,7 +5646,14 @@ jobs:
                   if (icon != null) {
                       Icon(icon, contentDescription = null, tint = content, modifier = Modifier.size(20.dp))
                   }
-                  Text(text, color = content, fontSize = fontSize.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                  Text(
+                      text,
+                      color = content,
+                      fontSize = fontSize.sp,
+                      fontWeight = FontWeight.Bold,
+                      maxLines = 1,
+                      overflow = TextOverflow.Ellipsis
+                  )
               }
           }
 
@@ -5866,6 +6142,68 @@ jobs:
                   if (trailing != null) Text(trailing, fontSize = 13.sp, color = trailingColor)
               }
           }
+
+          /** Floating top banner that replaces native Android toasts and matches Pulse's active mood. */
+          @Composable
+          fun PulseToastHost(isSakina: Boolean, modifier: Modifier = Modifier) {
+              val currentMsg = PulseToastBus.message
+              val seq = PulseToastBus.seq
+              var displayed by remember { mutableStateOf("") }
+              if (currentMsg != null) displayed = currentMsg
+
+              LaunchedEffect(seq) {
+                  if (PulseToastBus.message != null) {
+                      kotlinx.coroutines.delay(2200L)
+                      PulseToastBus.clear()
+                  }
+              }
+
+              val shape = RoundedCornerShape(999.dp)
+              val bgBrush = if (isSakina) {
+                  Brush.horizontalGradient(listOf(Color(0xF20D2C22), Color(0xF2081E17)))
+              } else {
+                  Brush.horizontalGradient(listOf(Color(0xF2231D30), Color(0xF2171420)))
+              }
+              val borderCol = if (isSakina) Pal.Gold.copy(alpha = 0.52f) else Pal.Ember.copy(alpha = 0.52f)
+              val accentCol = if (isSakina) Pal.GoldLight else Pal.Ember
+              val textCol = if (isSakina) Pal.GoldLight else Pal.Text
+
+              AnimatedVisibility(
+                  visible = currentMsg != null,
+                  enter = fadeIn(tween(180)) + slideInVertically(tween(220)) { -it / 2 },
+                  exit = fadeOut(tween(260)) + slideOutVertically(tween(260)) { -it / 2 },
+                  modifier = modifier
+              ) {
+                  Row(
+                      modifier = Modifier
+                          .statusBarsPadding()
+                          .padding(top = 12.dp, start = 20.dp, end = 20.dp)
+                          .widthIn(max = 420.dp)
+                          .shadow(14.dp, shape, ambientColor = accentCol, spotColor = Color.Black)
+                          .clip(shape)
+                          .background(bgBrush)
+                          .border(1.dp, borderCol, shape)
+                          .padding(horizontal = 18.dp, vertical = 11.dp),
+                      verticalAlignment = Alignment.CenterVertically,
+                      horizontalArrangement = Arrangement.spacedBy(10.dp)
+                  ) {
+                      Box(
+                          modifier = Modifier
+                              .size(8.dp)
+                              .clip(CircleShape)
+                              .background(accentCol)
+                      )
+                      Text(
+                          displayed,
+                          fontSize = 13.sp,
+                          fontWeight = FontWeight.SemiBold,
+                          color = textCol,
+                          maxLines = 2,
+                          overflow = TextOverflow.Ellipsis
+                      )
+                  }
+              }
+          }
           EOF
 
           cat << 'EOF' > app/src/main/java/com/pulse/player/PulseApp.kt
@@ -5890,6 +6228,7 @@ jobs:
           import androidx.compose.foundation.layout.Box
           import androidx.compose.foundation.layout.fillMaxSize
           import androidx.compose.runtime.*
+          import androidx.compose.ui.Alignment
           import androidx.compose.ui.Modifier
           import androidx.compose.ui.platform.LocalConfiguration
           import androidx.compose.ui.platform.LocalContext
@@ -5924,6 +6263,12 @@ jobs:
                   while (player != null && vm.isPlaying && isResumed) {
                       vm.pollPosition()
                       delay(1000L)
+                  }
+              }
+              LaunchedEffect(vm.sleepTimerRemainingSec > 0L, isResumed) {
+                  while (vm.sleepTimerRemainingSec > 0L && isResumed) {
+                      delay(1000L)
+                      vm.refreshSleepTimer()
                   }
               }
               LaunchedEffect(vm.rawFolders.size) {
@@ -6123,6 +6468,16 @@ jobs:
                   if (vm.isFullScreen) {
                       StudioScreen(vm = vm, isTv = isTv, onExit = { vm.isFullScreen = false })
                   }
+
+                  val toastSakina = if (vm.isFullScreen) {
+                      vm.effectiveScene == SCENE_SAKINA
+                  } else {
+                      vm.activeSection == LibrarySection.QURAN
+                  }
+                  PulseToastHost(
+                      isSakina = toastSakina,
+                      modifier = Modifier.align(Alignment.TopCenter)
+                  )
               }
 
               // ---------------- Dialogs ----------------
@@ -7955,6 +8310,7 @@ jobs:
           import androidx.compose.foundation.shape.CircleShape
           import androidx.compose.foundation.shape.RoundedCornerShape
           import androidx.compose.material.icons.Icons
+          import androidx.compose.material.icons.automirrored.rounded.PlaylistPlay
           import androidx.compose.material.icons.rounded.*
           import androidx.compose.material3.*
           import androidx.compose.runtime.*
@@ -8006,8 +8362,14 @@ jobs:
 
               var controlsVisible by remember { mutableStateOf(true) }
               var interactionTick by remember { mutableIntStateOf(0) }
+              var showModeDialog by remember { mutableStateOf(false) }
               var showSleepDialog by remember { mutableStateOf(false) }
               var showEqDialog by remember { mutableStateOf(false) }
+              val displayArtist = remember(vm.currentArtist, vm.currentAlbum, title) {
+                  val folderName = vm.currentAlbum.substringAfterLast('/')
+                  val cleaned = cleanArtistName(vm.currentArtist, folderName)
+                  if (cleaned.equals(title, ignoreCase = true)) "" else cleaned
+              }
               val rootFocus = remember { FocusRequester() }
               val playFocus = remember { FocusRequester() }
               fun bump() {
@@ -8086,13 +8448,14 @@ jobs:
                           ) {
                               Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
                                   StudioHeaderLabel(vm, mood, isSakina)
-                                  StudioTitle(title = title, artist = vm.currentArtist, mood = mood, isSakina = isSakina, centered = false, large = true, queueText = queueText(vm))
+                                  StudioTitle(title = title, artist = displayArtist, mood = mood, isSakina = isSakina, centered = false, large = true, queueText = queueText(vm))
                                   StudioProgress(vm, mood, isSakina, isTv = true, onInteract = { bump() })
                                   StudioControls(vm, mood, isTv = true, playFocus = playFocus, onInteract = { bump() })
                                   StudioQuickTools(
                                       vm = vm,
                                       mood = mood,
                                       isTv = true,
+                                      onOpenMode = { bump(); showModeDialog = true },
                                       onOpenSleep = { bump(); showSleepDialog = true },
                                       onOpenEq = { bump(); showEqDialog = true },
                                       onInteract = { bump() }
@@ -8118,8 +8481,8 @@ jobs:
                                   color = (if (isSakina) Pal.GoldLight else mood.text).copy(alpha = 0.85f),
                                   maxLines = 1
                               )
-                              if (vm.currentArtist.isNotBlank()) {
-                                  Text(vm.currentArtist, fontSize = 15.sp, color = mood.muted.copy(alpha = 0.8f), maxLines = 1)
+                              if (displayArtist.isNotBlank()) {
+                                  Text(displayArtist, fontSize = 15.sp, color = mood.muted.copy(alpha = 0.8f), maxLines = 1)
                               }
                           }
                       }
@@ -8164,7 +8527,7 @@ jobs:
                                   .fillMaxWidth()
                                   .padding(vertical = 6.dp)
                           )
-                          StudioTitle(title = title, artist = vm.currentArtist, mood = mood, isSakina = isSakina, centered = isSakina, large = false, queueText = queueText(vm))
+                          StudioTitle(title = title, artist = displayArtist, mood = mood, isSakina = isSakina, centered = isSakina, large = false, queueText = queueText(vm))
                           Spacer(Modifier.height(10.dp))
                           StudioProgress(vm, mood, isSakina, isTv = false, onInteract = {})
                           Spacer(Modifier.height(8.dp))
@@ -8174,6 +8537,7 @@ jobs:
                               vm = vm,
                               mood = mood,
                               isTv = false,
+                              onOpenMode = { showModeDialog = true },
                               onOpenSleep = { showSleepDialog = true },
                               onOpenEq = { showEqDialog = true },
                               onInteract = {}
@@ -8185,9 +8549,21 @@ jobs:
                   }
               }
 
+              if (showModeDialog) {
+                  PlaybackModeDialog(
+                      currentMode = vm.playbackMode,
+                      isSakina = isSakina,
+                      onSelect = { mode ->
+                          vm.applyPlaybackMode(mode, announce = true)
+                          showModeDialog = false
+                      },
+                      onDismiss = { showModeDialog = false }
+                  )
+              }
               if (showSleepDialog) {
                   SleepTimerDialog(
                       remainingSec = vm.sleepTimerRemainingSec,
+                      isSakina = isSakina,
                       onSelectMinutes = { mins ->
                           vm.setSleepTimer(mins)
                           showSleepDialog = false
@@ -8198,6 +8574,7 @@ jobs:
               if (showEqDialog) {
                   EqualizerDialog(
                       currentPreset = vm.eqPreset,
+                      isSakina = isSakina,
                       onSelect = { preset ->
                           vm.setEqPresetPref(preset)
                           showEqDialog = false
@@ -8446,6 +8823,7 @@ jobs:
               vm: PulseViewModel,
               mood: Mood,
               isTv: Boolean,
+              onOpenMode: () -> Unit,
               onOpenSleep: () -> Unit,
               onOpenEq: () -> Unit,
               onInteract: () -> Unit
@@ -8454,7 +8832,7 @@ jobs:
                   MODE_REPEAT_ALL -> Icons.Rounded.Repeat to mood.accent
                   MODE_REPEAT_ONE -> Icons.Rounded.RepeatOne to mood.accent
                   MODE_PLAY_ONCE -> Icons.Rounded.StopCircle to mood.accent
-                  else -> Icons.Rounded.Repeat to mood.muted
+                  else -> Icons.AutoMirrored.Rounded.PlaylistPlay to mood.text
               }
               val isFav = vm.currentMediaId.isNotBlank() && vm.isFavorite(vm.currentMediaId)
               val sleepSec = vm.sleepTimerRemainingSec
@@ -8485,10 +8863,11 @@ jobs:
                   RoundIconButton(
                       icon = modeIcon,
                       contentDescription = stringResource(R.string.cd_repeat),
-                      onClick = { onInteract(); vm.cyclePlaybackMode() },
+                      onClick = onOpenMode,
                       size = btnSize, iconSize = 20.dp, tint = modeTint,
-                      container = if (vm.playbackMode != MODE_REPEAT_OFF) mood.accent.copy(alpha = 0.12f) else Color.Transparent,
-                      borderColor = Color.Transparent, ring = mood.accent
+                      container = if (vm.playbackMode != MODE_REPEAT_OFF) mood.accent.copy(alpha = 0.14f) else Color.Transparent,
+                      borderColor = if (vm.playbackMode != MODE_REPEAT_OFF) mood.accent.copy(alpha = 0.32f) else Color.Transparent,
+                      ring = mood.accent
                   )
                   RoundIconButton(
                       icon = if (isFav) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
@@ -8573,35 +8952,19 @@ jobs:
               showExit: Boolean
           ) {
               if (isSakina) {
-                  val modeLabel = when (vm.playbackMode) {
-                      MODE_REPEAT_ALL -> R.string.mode_repeat_all
-                      MODE_REPEAT_ONE -> R.string.mode_repeat_one
-                      MODE_PLAY_ONCE -> R.string.mode_play_once
-                      else -> R.string.mode_repeat_off
-                  }
                   Row(
                       modifier = Modifier.fillMaxWidth(),
-                      horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterHorizontally)
+                      horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
+                      verticalAlignment = Alignment.CenterVertically
                   ) {
-                      PillButton(
-                          text = stringResource(modeLabel),
-                          onClick = { onInteract(); vm.cyclePlaybackMode() },
-                          icon = Icons.Rounded.StopCircle,
-                          container = Pal.Gold.copy(alpha = 0.10f),
-                          content = Pal.GoldLight,
-                          borderColor = Pal.Gold.copy(alpha = 0.3f),
-                          height = 44.dp,
-                          fontSize = 13,
-                          ring = Pal.Gold
-                      )
                       PillButton(
                           text = stringResource(R.string.scene_label, stringResource(R.string.scene_sakina)),
                           onClick = { onInteract(); vm.cycleScene() },
                           icon = Icons.Rounded.Brightness3,
-                          container = Color.Transparent,
-                          content = Pal.Mint,
-                          borderColor = Pal.Mint.copy(alpha = 0.18f),
-                          height = 44.dp,
+                          container = Pal.Gold.copy(alpha = 0.10f),
+                          content = Pal.GoldLight,
+                          borderColor = Pal.Gold.copy(alpha = 0.30f),
+                          height = 42.dp,
                           fontSize = 13,
                           ring = Pal.Gold
                       )
@@ -8620,7 +8983,7 @@ jobs:
               } else {
                   Row(
                       modifier = Modifier.fillMaxWidth(),
-                      horizontalArrangement = Arrangement.spacedBy(14.dp, Alignment.CenterHorizontally),
+                      horizontalArrangement = Arrangement.SpaceEvenly,
                       verticalAlignment = Alignment.CenterVertically
                   ) {
                       musicScenes.forEach { option ->
@@ -8660,29 +9023,31 @@ jobs:
           private fun SceneChip(icon: ImageVector, label: String, selected: Boolean, mood: Mood, onClick: () -> Unit) {
               Column(
                   modifier = Modifier
-                      .width(64.dp)
+                      .widthIn(min = 52.dp, max = 64.dp)
                       .focusGlow(RoundedCornerShape(16.dp), ring = mood.accent, scaleTo = 1.08f)
                       .clip(RoundedCornerShape(16.dp))
-                      .clickable(role = Role.RadioButton, onClick = onClick),
+                      .clickable(role = Role.RadioButton, onClick = onClick)
+                      .padding(horizontal = 2.dp, vertical = 2.dp),
                   horizontalAlignment = Alignment.CenterHorizontally,
-                  verticalArrangement = Arrangement.spacedBy(6.dp)
+                  verticalArrangement = Arrangement.spacedBy(5.dp)
               ) {
                   Box(
                       modifier = Modifier
-                          .size(52.dp)
+                          .size(48.dp)
                           .clip(CircleShape)
                           .background(if (selected) mood.accent.copy(alpha = 0.14f) else mood.text.copy(alpha = 0.04f))
                           .border(if (selected) 2.dp else 1.dp, if (selected) mood.accent else mood.line, CircleShape),
                       contentAlignment = Alignment.Center
                   ) {
-                      Icon(icon, contentDescription = null, tint = if (selected) mood.accent else mood.muted, modifier = Modifier.size(24.dp))
+                      Icon(icon, contentDescription = null, tint = if (selected) mood.accent else mood.muted, modifier = Modifier.size(22.dp))
                   }
                   Text(
                       label,
                       fontSize = 11.sp,
                       fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
                       color = if (selected) mood.text else mood.muted,
-                      maxLines = 1
+                      maxLines = 1,
+                      overflow = TextOverflow.Ellipsis
                   )
               }
           }
@@ -8691,6 +9056,7 @@ jobs:
           cat << 'EOF' > app/src/main/java/com/pulse/player/SettingsScreen.kt
           package com.pulse.player
 
+          import android.app.Activity
           import androidx.compose.foundation.background
           import androidx.compose.foundation.border
           import androidx.compose.foundation.clickable
@@ -8703,6 +9069,7 @@ jobs:
           import androidx.compose.foundation.verticalScroll
           import androidx.compose.material.icons.Icons
           import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+          import androidx.compose.material.icons.automirrored.rounded.PlaylistPlay
           import androidx.compose.material.icons.rounded.*
           import androidx.compose.material3.*
           import androidx.compose.runtime.*
@@ -8775,7 +9142,9 @@ jobs:
               onEditNetwork: (String) -> Unit
           ) {
               var pendingRemoval by remember { mutableStateOf<LibrarySource?>(null) }
+              var showModeDialog by remember { mutableStateOf(false) }
               var showEqDialog by remember { mutableStateOf(false) }
+              var showLanguageDialog by remember { mutableStateOf(false) }
               val context = LocalContext.current
               val version = remember {
                   runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull() ?: ""
@@ -8856,6 +9225,41 @@ jobs:
                           checked = vm.useRealAlbumArt,
                           onToggle = { vm.setUseRealAlbumArtPref(!vm.useRealAlbumArt) }
                       )
+                      val modeLabel = stringResource(
+                          when (vm.playbackMode) {
+                              MODE_REPEAT_ALL -> R.string.mode_repeat_all
+                              MODE_REPEAT_ONE -> R.string.mode_repeat_one
+                              MODE_PLAY_ONCE -> R.string.mode_play_once
+                              else -> R.string.mode_repeat_off
+                          }
+                      )
+                      val modeIcon = when (vm.playbackMode) {
+                          MODE_REPEAT_ALL -> Icons.Rounded.Repeat
+                          MODE_REPEAT_ONE -> Icons.Rounded.RepeatOne
+                          MODE_PLAY_ONCE -> Icons.Rounded.StopCircle
+                          else -> Icons.AutoMirrored.Rounded.PlaylistPlay
+                      }
+                      val eqShape = RoundedCornerShape(18.dp)
+                      Row(
+                          modifier = Modifier
+                              .fillMaxWidth()
+                              .focusGlow(eqShape, ring = Pal.Ember, scaleTo = 1.02f)
+                              .clip(eqShape)
+                              .background(Pal.Surface)
+                              .border(1.dp, Pal.Line, eqShape)
+                              .clickable(role = Role.Button) { showModeDialog = true }
+                              .padding(horizontal = 16.dp, vertical = 14.dp),
+                          verticalAlignment = Alignment.CenterVertically,
+                          horizontalArrangement = Arrangement.spacedBy(12.dp)
+                      ) {
+                          Icon(modeIcon, contentDescription = null, tint = Pal.Gold, modifier = Modifier.size(22.dp))
+                          Column(modifier = Modifier.weight(1f)) {
+                              Text(stringResource(R.string.playback_mode_title), fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                              Text(modeLabel, fontSize = 12.sp, color = Pal.Muted)
+                          }
+                          Icon(Icons.Rounded.ChevronRight, contentDescription = null, tint = Pal.Muted)
+                      }
+
                       val eqLabel = stringResource(
                           when (vm.eqPreset) {
                               EQ_VOICE -> R.string.eq_voice
@@ -8864,7 +9268,6 @@ jobs:
                               else -> R.string.eq_normal
                           }
                       )
-                      val eqShape = RoundedCornerShape(18.dp)
                       Row(
                           modifier = Modifier
                               .fillMaxWidth()
@@ -8881,6 +9284,33 @@ jobs:
                           Column(modifier = Modifier.weight(1f)) {
                               Text(stringResource(R.string.equalizer), fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
                               Text(eqLabel, fontSize = 12.sp, color = Pal.Muted)
+                          }
+                          Icon(Icons.Rounded.ChevronRight, contentDescription = null, tint = Pal.Muted)
+                      }
+
+                      val langLabel = stringResource(
+                          when (vm.appLanguage) {
+                              LANG_AR -> R.string.language_arabic
+                              LANG_EN -> R.string.language_english
+                              else -> R.string.language_system
+                          }
+                      )
+                      Row(
+                          modifier = Modifier
+                              .fillMaxWidth()
+                              .focusGlow(eqShape, ring = Pal.Ember, scaleTo = 1.02f)
+                              .clip(eqShape)
+                              .background(Pal.Surface)
+                              .border(1.dp, Pal.Line, eqShape)
+                              .clickable(role = Role.Button) { showLanguageDialog = true }
+                              .padding(horizontal = 16.dp, vertical = 14.dp),
+                          verticalAlignment = Alignment.CenterVertically,
+                          horizontalArrangement = Arrangement.spacedBy(12.dp)
+                      ) {
+                          Icon(Icons.Rounded.Language, contentDescription = null, tint = Pal.Teal, modifier = Modifier.size(22.dp))
+                          Column(modifier = Modifier.weight(1f)) {
+                              Text(stringResource(R.string.language_title), fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                              Text(langLabel, fontSize = 12.sp, color = Pal.Muted)
                           }
                           Icon(Icons.Rounded.ChevronRight, contentDescription = null, tint = Pal.Muted)
                       }
@@ -8940,6 +9370,18 @@ jobs:
                   )
               }
 
+              if (showModeDialog) {
+                  PlaybackModeDialog(
+                      currentMode = vm.playbackMode,
+                      isSakina = false,
+                      onSelect = { mode ->
+                          vm.applyPlaybackMode(mode, announce = true)
+                          showModeDialog = false
+                      },
+                      onDismiss = { showModeDialog = false }
+                  )
+              }
+
               if (showEqDialog) {
                   EqualizerDialog(
                       currentPreset = vm.eqPreset,
@@ -8948,6 +9390,20 @@ jobs:
                           showEqDialog = false
                       },
                       onDismiss = { showEqDialog = false }
+                  )
+              }
+
+              if (showLanguageDialog) {
+                  LanguageDialog(
+                      currentLanguage = vm.appLanguage,
+                      onSelect = { code ->
+                          showLanguageDialog = false
+                          if (code != vm.appLanguage) {
+                              vm.setAppLanguagePref(code)
+                              (context as? Activity)?.recreate()
+                          }
+                      },
+                      onDismiss = { showLanguageDialog = false }
                   )
               }
           }
@@ -9365,6 +9821,7 @@ jobs:
           import androidx.compose.foundation.text.KeyboardOptions
           import androidx.compose.foundation.verticalScroll
           import androidx.compose.material.icons.Icons
+          import androidx.compose.material.icons.automirrored.rounded.PlaylistPlay
           import androidx.compose.material.icons.rounded.*
           import androidx.compose.material3.*
           import androidx.compose.runtime.*
@@ -9712,8 +10169,138 @@ jobs:
           }
 
           @Composable
+          private fun PulseGlassSheetDialog(
+              title: String,
+              subtitle: String?,
+              headerIcon: ImageVector,
+              isSakina: Boolean,
+              onDismiss: () -> Unit,
+              content: @Composable ColumnScope.(accent: Color, muted: Color, divider: Color) -> Unit
+          ) {
+              val shape = RoundedCornerShape(28.dp)
+              val accent = if (isSakina) Pal.Gold else Pal.Ember
+              val titleColor = if (isSakina) Pal.GoldLight else Pal.Text
+              val muted = if (isSakina) Pal.Sage else Pal.Muted
+              val divider = if (isSakina) Pal.Gold.copy(alpha = 0.14f) else Pal.Line
+              val bgBrush = if (isSakina) {
+                  Brush.verticalGradient(listOf(Color(0xFF0E2920), Color(0xFF071914)))
+              } else {
+                  Brush.verticalGradient(listOf(Color(0xFF1C1926), Color(0xFF121019)))
+              }
+              val borderCol = if (isSakina) Pal.Gold.copy(alpha = 0.30f) else Color(0x28F4F1EA)
+
+              Dialog(
+                  onDismissRequest = onDismiss,
+                  properties = DialogProperties(usePlatformDefaultWidth = false)
+              ) {
+                  Column(
+                      modifier = Modifier
+                          .padding(horizontal = 20.dp, vertical = 24.dp)
+                          .widthIn(max = 420.dp)
+                          .fillMaxWidth()
+                          .clip(shape)
+                          .background(bgBrush)
+                          .border(1.dp, borderCol, shape)
+                          .padding(18.dp),
+                      verticalArrangement = Arrangement.spacedBy(12.dp)
+                  ) {
+                      Row(
+                          modifier = Modifier.fillMaxWidth(),
+                          verticalAlignment = Alignment.CenterVertically,
+                          horizontalArrangement = Arrangement.spacedBy(12.dp)
+                      ) {
+                          Box(
+                              modifier = Modifier
+                                  .size(42.dp)
+                                  .clip(RoundedCornerShape(13.dp))
+                                  .background(accent.copy(alpha = 0.16f))
+                                  .border(1.dp, accent.copy(alpha = 0.36f), RoundedCornerShape(13.dp)),
+                              contentAlignment = Alignment.Center
+                          ) {
+                              Icon(headerIcon, contentDescription = null, tint = titleColor, modifier = Modifier.size(22.dp))
+                          }
+                          Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                              Text(
+                                  title,
+                                  fontSize = 18.sp,
+                                  fontWeight = FontWeight.Bold,
+                                  color = titleColor,
+                                  maxLines = 1,
+                                  overflow = TextOverflow.Ellipsis
+                              )
+                              if (!subtitle.isNullOrBlank()) {
+                                  Text(
+                                      subtitle,
+                                      fontSize = 12.sp,
+                                      color = accent,
+                                      fontWeight = FontWeight.Medium,
+                                      maxLines = 1,
+                                      overflow = TextOverflow.Ellipsis
+                                  )
+                              }
+                          }
+                          RoundIconButton(
+                              icon = Icons.Rounded.Close,
+                              contentDescription = stringResource(R.string.close),
+                              onClick = onDismiss,
+                              size = 36.dp,
+                              iconSize = 18.dp,
+                              tint = muted,
+                              container = Color(0x12FFFFFF),
+                              borderColor = divider,
+                              ring = accent
+                          )
+                      }
+                      HorizontalDivider(color = divider, thickness = 1.dp)
+                      Column(
+                          modifier = Modifier.verticalScroll(rememberScrollState()),
+                          verticalArrangement = Arrangement.spacedBy(8.dp)
+                      ) {
+                          content(accent, muted, divider)
+                      }
+                  }
+              }
+          }
+
+          @Composable
+          fun PlaybackModeDialog(
+              currentMode: Int,
+              isSakina: Boolean = false,
+              onSelect: (Int) -> Unit,
+              onDismiss: () -> Unit
+          ) {
+              val modes = listOf(
+                  Triple(MODE_REPEAT_ALL, Icons.Rounded.Repeat, R.string.mode_repeat_all to R.string.mode_repeat_all_desc),
+                  Triple(MODE_REPEAT_ONE, Icons.Rounded.RepeatOne, R.string.mode_repeat_one to R.string.mode_repeat_one_desc),
+                  Triple(MODE_PLAY_ONCE, Icons.Rounded.StopCircle, R.string.mode_play_once to R.string.mode_play_once_desc),
+                  Triple(MODE_REPEAT_OFF, Icons.AutoMirrored.Rounded.PlaylistPlay, R.string.mode_repeat_off to R.string.mode_repeat_off_desc)
+              )
+              PulseGlassSheetDialog(
+                  title = stringResource(R.string.playback_mode_title),
+                  subtitle = null,
+                  headerIcon = Icons.Rounded.Repeat,
+                  isSakina = isSakina,
+                  onDismiss = onDismiss
+              ) { accent, muted, divider ->
+                  modes.forEach { (mode, icon, labels) ->
+                      DialogChoiceRow(
+                          label = stringResource(labels.first),
+                          description = stringResource(labels.second),
+                          icon = icon,
+                          selected = currentMode == mode,
+                          accent = accent,
+                          muted = muted,
+                          divider = divider,
+                          onClick = { onSelect(mode) }
+                      )
+                  }
+              }
+          }
+
+          @Composable
           fun SleepTimerDialog(
               remainingSec: Long,
+              isSakina: Boolean = false,
               onSelectMinutes: (Int) -> Unit,
               onDismiss: () -> Unit
           ) {
@@ -9725,92 +10312,165 @@ jobs:
                   60 to R.string.sleep_60,
                   -1 to R.string.sleep_end_of_track
               )
-              AlertDialog(
-                  onDismissRequest = onDismiss,
-                  containerColor = Pal.Sheet,
-                  shape = RoundedCornerShape(26.dp),
-                  title = { Text(stringResource(R.string.sleep_timer), fontWeight = FontWeight.Bold, color = Pal.Text) },
-                  text = {
-                      Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                          options.forEach { (mins, labelRes) ->
-                              val selected = when {
-                                  mins == 0 -> remainingSec == 0L
-                                  mins < 0 -> remainingSec < 0L
-                                  else -> false
-                              }
-                              DialogChoiceRow(
-                                  label = stringResource(labelRes),
-                                  selected = selected,
-                                  onClick = { onSelectMinutes(mins) }
-                              )
-                          }
+              val statusSubtitle = when {
+                  remainingSec > 0L -> stringResource(R.string.sleep_active_remaining, formatTime(remainingSec * 1000L))
+                  remainingSec < 0L -> stringResource(R.string.sleep_active_end)
+                  else -> null
+              }
+              PulseGlassSheetDialog(
+                  title = stringResource(R.string.sleep_timer),
+                  subtitle = statusSubtitle,
+                  headerIcon = Icons.Rounded.Bedtime,
+                  isSakina = isSakina,
+                  onDismiss = onDismiss
+              ) { accent, muted, divider ->
+                  options.forEach { (mins, labelRes) ->
+                      val selected = when {
+                          mins == 0 -> remainingSec == 0L
+                          mins < 0 -> remainingSec < 0L
+                          else -> remainingSec > 0L && remainingSec in ((mins - 15) * 60L + 1L)..(mins * 60L)
                       }
-                  },
-                  confirmButton = {},
-                  dismissButton = {
-                      TextButton(onClick = onDismiss) { Text(stringResource(R.string.close), color = Pal.Muted) }
+                      DialogChoiceRow(
+                          label = stringResource(labelRes),
+                          description = null,
+                          icon = if (mins == 0) Icons.Rounded.Close else if (mins < 0) Icons.Rounded.StopCircle else Icons.Rounded.Bedtime,
+                          selected = selected,
+                          accent = accent,
+                          muted = muted,
+                          divider = divider,
+                          onClick = { onSelectMinutes(mins) }
+                      )
                   }
+              }
+          }
+
+          @Composable
+          fun LanguageDialog(
+              currentLanguage: String,
+              onSelect: (String) -> Unit,
+              onDismiss: () -> Unit
+          ) {
+              val options = listOf(
+                  Triple(LANG_SYSTEM, Icons.Rounded.PhoneAndroid, R.string.language_system to R.string.language_system_desc),
+                  Triple(LANG_AR, Icons.Rounded.Language, R.string.language_arabic to R.string.language_arabic_desc),
+                  Triple(LANG_EN, Icons.Rounded.Language, R.string.language_english to R.string.language_english_desc)
               )
+              PulseGlassSheetDialog(
+                  title = stringResource(R.string.language_title),
+                  subtitle = null,
+                  headerIcon = Icons.Rounded.Language,
+                  isSakina = false,
+                  onDismiss = onDismiss
+              ) { accent, muted, divider ->
+                  options.forEach { (code, icon, labels) ->
+                      DialogChoiceRow(
+                          label = stringResource(labels.first),
+                          description = stringResource(labels.second),
+                          icon = icon,
+                          selected = currentLanguage == code,
+                          accent = accent,
+                          muted = muted,
+                          divider = divider,
+                          onClick = { onSelect(code) }
+                      )
+                  }
+              }
           }
 
           @Composable
           fun EqualizerDialog(
               currentPreset: Int,
+              isSakina: Boolean = false,
               onSelect: (Int) -> Unit,
               onDismiss: () -> Unit
           ) {
               val presets = listOf(
-                  EQ_NORMAL to R.string.eq_normal,
-                  EQ_VOICE to R.string.eq_voice,
-                  EQ_BASS to R.string.eq_bass,
-                  EQ_WARM to R.string.eq_warm
+                  EQ_NORMAL to (R.string.eq_normal to R.string.eq_normal_desc),
+                  EQ_VOICE to (R.string.eq_voice to R.string.eq_voice_desc),
+                  EQ_BASS to (R.string.eq_bass to R.string.eq_bass_desc),
+                  EQ_WARM to (R.string.eq_warm to R.string.eq_warm_desc)
               )
-              AlertDialog(
-                  onDismissRequest = onDismiss,
-                  containerColor = Pal.Sheet,
-                  shape = RoundedCornerShape(26.dp),
-                  title = { Text(stringResource(R.string.equalizer), fontWeight = FontWeight.Bold, color = Pal.Text) },
-                  text = {
-                      Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                          presets.forEach { (preset, labelRes) ->
-                              DialogChoiceRow(
-                                  label = stringResource(labelRes),
-                                  selected = currentPreset == preset,
-                                  onClick = { onSelect(preset) }
-                              )
-                          }
-                      }
-                  },
-                  confirmButton = {},
-                  dismissButton = {
-                      TextButton(onClick = onDismiss) { Text(stringResource(R.string.close), color = Pal.Muted) }
+              PulseGlassSheetDialog(
+                  title = stringResource(R.string.equalizer),
+                  subtitle = null,
+                  headerIcon = Icons.Rounded.Equalizer,
+                  isSakina = isSakina,
+                  onDismiss = onDismiss
+              ) { accent, muted, divider ->
+                  presets.forEach { (preset, labels) ->
+                      DialogChoiceRow(
+                          label = stringResource(labels.first),
+                          description = stringResource(labels.second),
+                          icon = Icons.Rounded.Equalizer,
+                          selected = currentPreset == preset,
+                          accent = accent,
+                          muted = muted,
+                          divider = divider,
+                          onClick = { onSelect(preset) }
+                      )
                   }
-              )
+              }
           }
 
           @Composable
-          private fun DialogChoiceRow(label: String, selected: Boolean, onClick: () -> Unit) {
-              val shape = RoundedCornerShape(14.dp)
+          private fun DialogChoiceRow(
+              label: String,
+              description: String?,
+              icon: ImageVector,
+              selected: Boolean,
+              accent: Color,
+              muted: Color,
+              divider: Color,
+              onClick: () -> Unit
+          ) {
+              val shape = RoundedCornerShape(16.dp)
               Row(
                   modifier = Modifier
                       .fillMaxWidth()
-                      .focusGlow(shape, ring = Pal.Ember, scaleTo = 1.03f)
+                      .focusGlow(shape, ring = accent, scaleTo = 1.025f)
                       .clip(shape)
-                      .background(if (selected) Pal.Ember.copy(alpha = 0.16f) else Pal.Surface)
-                      .border(1.dp, if (selected) Pal.Ember else Pal.Line, shape)
+                      .background(if (selected) accent.copy(alpha = 0.16f) else Color(0x0BFFFFFF))
+                      .border(1.dp, if (selected) accent.copy(alpha = 0.65f) else divider, shape)
                       .clickable(role = Role.RadioButton, onClick = onClick)
-                      .padding(horizontal = 14.dp, vertical = 12.dp),
+                      .padding(horizontal = 12.dp, vertical = 11.dp),
                   verticalAlignment = Alignment.CenterVertically,
-                  horizontalArrangement = Arrangement.SpaceBetween
+                  horizontalArrangement = Arrangement.spacedBy(12.dp)
               ) {
-                  Text(
-                      label,
-                      fontSize = 15.sp,
-                      fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-                      color = if (selected) Pal.Ember else Pal.Text
-                  )
+                  Box(
+                      modifier = Modifier
+                          .size(36.dp)
+                          .clip(RoundedCornerShape(11.dp))
+                          .background(if (selected) accent.copy(alpha = 0.22f) else Color(0x12FFFFFF)),
+                      contentAlignment = Alignment.Center
+                  ) {
+                      Icon(
+                          icon,
+                          contentDescription = null,
+                          tint = if (selected) accent else muted,
+                          modifier = Modifier.size(18.dp)
+                      )
+                  }
+                  Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                      Text(
+                          label,
+                          fontSize = 14.sp,
+                          fontWeight = if (selected) FontWeight.Bold else FontWeight.SemiBold,
+                          color = if (selected) accent else Pal.Text,
+                          maxLines = 1,
+                          overflow = TextOverflow.Ellipsis
+                      )
+                      if (!description.isNullOrBlank()) {
+                          Text(
+                              description,
+                              fontSize = 12.sp,
+                              color = muted,
+                              maxLines = 1,
+                              overflow = TextOverflow.Ellipsis
+                          )
+                      }
+                  }
                   if (selected) {
-                      Icon(Icons.Rounded.Check, contentDescription = null, tint = Pal.Ember, modifier = Modifier.size(18.dp))
+                      Icon(Icons.Rounded.Check, contentDescription = null, tint = accent, modifier = Modifier.size(18.dp))
                   }
               }
           }
@@ -9874,10 +10534,10 @@ jobs:
           mkdir -p dist
           if [ "$BUILD_MODE" = "release" ]; then
             gradle assembleRelease
-            cp app/build/outputs/apk/release/app-release.apk "dist/PulsePlayer-v3.7.${GITHUB_RUN_NUMBER}.apk"
+            cp app/build/outputs/apk/release/app-release.apk "dist/PulsePlayer-v3.10.${GITHUB_RUN_NUMBER}.apk"
           else
             gradle assembleDebug
-            cp app/build/outputs/apk/debug/app-debug.apk "dist/PulsePlayer-v3.7.${GITHUB_RUN_NUMBER}-debug-UNSIGNED-KEY.apk"
+            cp app/build/outputs/apk/debug/app-debug.apk "dist/PulsePlayer-v3.10.${GITHUB_RUN_NUMBER}-debug-UNSIGNED-KEY.apk"
           fi
 
       - name: Remove signing key from runner
